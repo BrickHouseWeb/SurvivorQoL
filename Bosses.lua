@@ -80,17 +80,47 @@ local function LairDist(name)
   end
 end
 
--- tries each name starting at `start`; puts the old target back if nothing was found.
--- nearOnly (targeting by itself): a guardian counts within the reach of its lair; anything
--- counts within about 28 yards or while it attacks you.
-local function TargetFrom(list, start, nearOnly)
-  local n = table.getn(list)
-  local before = UnitExists("target") and UnitName("target")
-  for k = 0, n - 1 do
-    local name = list[math.mod(start - 1 + k, n) + 1].name
-    local d = nearOnly and LairDist(name)
-    if TryTarget(name) and (not nearOnly or (d and d <= db.reach) or Close() or AttackingMe()) then return true end
+-- "Near" is decided without touching your target: a boss or guardian is near when its nameplate
+-- is on screen, or (guardians) when you are within reach of its lair. Then it is targeted once.
+-- (Trying names one by one with TargetByName and switching back made the target flicker, and
+-- TargetLastTarget only goes back one step.)
+
+-- names of enemies whose nameplate is on screen; nil when no enemy plate is shown at all
+-- (nameplates turned off), so "near" can't be read from plates
+local function PlateNames()
+  local names, any = {}, false
+  for plate in pairs(QOL.PlateList()) do
+    if plate:IsShown() and not QOL.PlateIsFriendly(plate) then
+      any = true
+      local regions = { plate:GetRegions() }
+      for i = 1, table.getn(regions) do
+        local r = regions[i]
+        if r and r.GetObjectType and r:GetObjectType() == "FontString" then
+          local t = r:GetText()
+          if t and t ~= "" and not string.find(t, "^%d+$") then names[t] = true end
+        end
+      end
+    end
   end
+  return any and names or nil
+end
+
+-- the bosses and guardians near you, most important first
+local function Near(list)
+  local plates, near = PlateNames(), {}
+  for i = 1, table.getn(list) do
+    local name = list[i].name
+    local d = LairDist(name)
+    if (plates and plates[name]) or (d and d <= db.reach) then table.insert(near, list[i]) end
+  end
+  return near, plates
+end
+
+-- targets one name once; keeps it only if it worked (and, with check, if it is close or
+-- attacking you), otherwise goes back to what you had
+local function Pick(name, check)
+  local before = UnitExists("target") and UnitName("target")
+  if TryTarget(name) and (not check or Close() or AttackingMe()) then return true end
   local now = UnitExists("target") and UnitName("target")
   if now ~= before then
     if before and TargetLastTarget then TargetLastTarget()
@@ -99,14 +129,28 @@ local function TargetFrom(list, start, nearOnly)
   return false
 end
 
--- the Tab key: the next boss or guardian after the one you have, else the normal Tab
+-- the best thing to target right now: the first near one, or with nameplates off, the most
+-- important one if it turns out to be close
+local function Best(list, after)
+  local near, plates = Near(list)
+  local n = table.getn(near)
+  if n > 0 then
+    local i = Index(near, after)
+    return near[i and math.mod(i, n) + 1 or 1].name, false
+  end
+  if not plates and list[1] then return list[1].name, true end
+end
+
+-- the Tab key: the next near boss or guardian after the one you have, else the normal Tab
 local function Tab()
   if db and db.tab and QOL.IsOn(QOL.Module("bosses")) then
     local list = Targets()
-    local n = table.getn(list)
-    if n > 0 then
-      local i = Index(list, UnitExists("target") and UnitName("target"))
-      if TargetFrom(list, i and math.mod(i, n) + 1 or 1, true) then return end
+    if table.getn(list) > 0 then
+      local current = UnitExists("target") and not UnitIsDead("target") and UnitName("target")
+      local name, check = Best(list, current)
+      -- already on the only one near: stay on it
+      if name and name == current then return end
+      if name and Pick(name, check) then return end
     end
   end
   if nativeTab then nativeTab() end
@@ -129,8 +173,9 @@ local function Tick()
   local has = UnitExists("target") and not UnitIsDead("target")
   if has and Index(list, UnitName("target")) then return end
   if db.auto == "notarget" and has then return end
-  -- nothing close: wait a bit before looking again
-  if not TargetFrom(list, 1, true) then nextTry = GetTime() + 1.5 end
+  local name, check = Best(list, nil)
+  -- nothing near, or it didn't stick: wait a bit before looking again
+  if not name or not Pick(name, check) then nextTry = GetTime() + 1 end
 end
 
 QOL.Register({
@@ -152,12 +197,12 @@ QOL.Register({
     G:Done()
     G = P:Group("Tab key")
     G:Checks({ { "Tab targets them first", "tab" } })
-    G:Note("Only ones near you count (see Guardian reach below). Press Tab again to step to the next one.")
+    G:Note("Only ones near you count: their nameplate is on screen, or you are within Guardian reach of a guardian's lair. Press Tab again to step to the next one.")
     G:Done()
     G = P:Group("Target by itself")
     G:Radios(nil, "auto", { { "off", "Off" }, { "notarget", "Only if I have no target" }, { "always", "Always" } })
     G:Sliders({ { "reach", function(v) return "Guardian reach: " .. v .. " yd" end, 10, 80, 5, "10 yd", "80 yd" } })
-    G:Note("Guardians: once you are this close to their lair, so you can tag them early. Bosses: once they are about 28 yards away or attacking you. Always also switches away from a normal enemy you targeted.")
+    G:Note("Targets one once its nameplate is on screen, or once you are this close to a guardian's lair so you can tag it early. Always also switches away from a normal enemy you targeted.")
     G:Done()
   end,
 })
