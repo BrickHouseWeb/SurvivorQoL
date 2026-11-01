@@ -65,8 +65,8 @@ local function Fill(t, defaults)
   end
 end
 
--- 135 degrees: the top-left corner. SurvivorsDragonUi's own button sits at the bottom left.
-QOL.generalDefaults = { minimap = true, minimapLock = false, minimapAngle = 135, snap = true, chat = true }
+-- 180 degrees: the middle of the left edge. SurvivorsDragonUi's own button sits at the bottom left.
+QOL.generalDefaults = { minimap = true, minimapLock = false, minimapAngle = 180, snap = true, chat = true }
 
 function QOL.ResetModule(m)
   local db = QOL.db[m.key]
@@ -85,8 +85,8 @@ boot:SetScript("OnEvent", function()
   if type(db.general) ~= "table" then db.general = {} end
   Fill(db.general, QOL.generalDefaults)
   QOL.db = db
-  -- the old default (220) put the button under SurvivorsDragonUi's own; move it once
-  if db.general.minimapAngle == 220 then db.general.minimapAngle = 135 end
+  -- old defaults: 220 put the button under SurvivorsDragonUi's own, 135 sat too high; move it once
+  if db.general.minimapAngle == 220 or db.general.minimapAngle == 135 then db.general.minimapAngle = 180 end
   -- 0.1 had separate ring and trail modules: carry their on/off over to Cursor once
   if db.on.cursor == nil and (db.on.ring ~= nil or db.on.trail ~= nil) then
     db.on.cursor = (db.on.ring or db.on.trail) and true or false
