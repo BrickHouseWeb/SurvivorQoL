@@ -85,13 +85,6 @@ local function Build(st)
   own.glow:SetVertexColor(1, 0.82, 0, 0.55)
   own.glow:SetPoint("TOPLEFT", own, "TOPLEFT", -18, 14)
   own.glow:SetPoint("BOTTOMRIGHT", own, "BOTTOMRIGHT", 18, -14)
-  -- your target: a gold frame a few pixels out around the whole plate, name included
-  own.frame = CreateFrame("Frame", nil, own)
-  own.frame:SetPoint("TOPLEFT", own, "TOPLEFT", -5, 18)
-  own.frame:SetPoint("BOTTOMRIGHT", own, "BOTTOMRIGHT", 5, -5)
-  own.frame:SetBackdrop({ edgeFile = WHITE, edgeSize = 2 })
-  own.frame:SetBackdropBorderColor(1, 0.82, 0, 1)
-  own.frame:Hide()
   own.edge = own:CreateTexture(nil, "BORDER")
   own.edge:SetTexture(WHITE)
   own.back = own:CreateTexture(nil, "ARTWORK")
@@ -143,10 +136,9 @@ local function Paint(st, kind, isTarget, calm)
   if isTarget then scale, alpha = math.max(scale, 1) * db.targetBoost, 1 end
   if own.scale ~= scale then own:SetScale(scale); own.scale = scale end
   if own.alpha ~= alpha then own:SetAlpha(alpha); own.alpha = alpha end
-  -- the target draws over the plates around it and gets its gold frame
+  -- the target draws over the plates around it
   if own.isTarget ~= isTarget then
     own:SetFrameLevel(st.plate:GetFrameLevel() + (isTarget and 30 or 1))
-    if isTarget then own.frame:Show() else own.frame:Hide() end
     own.isTarget = isTarget
   end
   local w, h = math.floor(db.width * db.plateScale + 0.5), math.max(3, math.floor(db.height * db.plateScale + 0.5))
@@ -158,8 +150,8 @@ local function Paint(st, kind, isTarget, calm)
     own.pct:SetFont(FONT, db.fontSize - 1, "OUTLINE")
     own.fs = db.fontSize
   end
-  -- the target: thick gold edge and a glow; everything else: thin black edge
-  local e = isTarget and 2 or 1
+  -- every plate has a 1 px edge: gold on your target, tier color on bosses and guardians, black otherwise
+  local e = 1
   if own.edgeSize ~= e then
     own.edge:ClearAllPoints()
     own.edge:SetPoint("TOPLEFT", own, "TOPLEFT", -e, e)
@@ -172,7 +164,7 @@ local function Paint(st, kind, isTarget, calm)
   if isTarget then own.edge:SetVertexColor(1, 0.82, 0, 1)
   elseif kind ~= "normal" and tint then own.edge:SetVertexColor(tint[1], tint[2], tint[3], 1)
   else own.edge:SetVertexColor(0, 0, 0, 1) end
-  if isTarget and db.targetGlow then own.glow:Show() else own.glow:Hide() end
+  own.glow:Hide()
   local low, high = st.bar:GetMinMaxValues()
   own.health:SetMinMaxValues(low, high)
   own.health:SetValue(st.bar:GetValue())
@@ -219,7 +211,7 @@ QOL.Register({
   desc = "Bosses and guardians get bigger plates, your target gets a gold border, and in busy fights the ordinary enemies shrink and fade.",
   default = true,
   defaults = { width = 110, height = 9, fontSize = 10, showName = true, showPercent = true,
-    bossSize = 1.4, guardianSize = 1.25, eliteSize = 1.05, targetBoost = 1.15, targetGlow = true,
+    bossSize = 1.4, guardianSize = 1.25, eliteSize = 1.05, targetBoost = 1.15,
     calm = true, threshold = 12, trashSize = 0.6, trashAlpha = 0.45, calmNames = true, plateScale = 1, otherAlpha = 0.8 },
   Enable = function(mdb) db = mdb; driver:SetScript("OnUpdate", Tick) end,
   Disable = function()
@@ -232,9 +224,9 @@ QOL.Register({
       { "plateScale", function(v) return "Plate size: " .. math.floor(v * 100 + 0.5) .. "%" end, 0.6, 1.6, 0.05, "Small", "Large" },
       { "fontSize", function(v) return "Text size: " .. v end, 7, 16, 1, "Small", "Large" },
     })
-    G:Checks({ { "Show health percent", "showPercent" }, { "Glow around my target", "targetGlow" } })
+    G:Checks({ { "Show health percent", "showPercent" } })
     G:Sliders({ { "otherAlpha", function(v) return "Plates other than my target: " .. math.floor(v * 100 + 0.5) .. "%" end, 0.3, 1, 0.05, "Faint", "Solid" } })
-    G:Note("Your target is always solid, on top, and framed in gold.")
+    G:Note("Your target is solid, a little bigger, on top, with a thin gold edge.")
     G:Done()
     G = P:Group("Busy fights")
     G:Checks({ { "Shrink ordinary enemies when it gets busy", "calm" } })
