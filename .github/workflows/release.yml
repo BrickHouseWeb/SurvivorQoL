@@ -2,6 +2,7 @@ name: Release
 
 # Adds a "Run workflow" button under Actions -> Release. Type the new version there and the
 # workflow sets "## Version:" in the .toc, commits, tags, builds the zip and creates the release.
+# (From the SurvivorsForge creator guide.)
 on:
   workflow_dispatch:
     inputs:
