@@ -9,6 +9,7 @@
 local db
 local holding = false   -- true while we have called MouselookStart and not Stop
 local freedAt           -- GetTime() when the cursor was last needed
+local freedFor          -- why: "alt", "cards" or "window" (only cards park the cursor first)
 local freeX, freeY      -- cursor position when the cursor stopped being needed
 local elapsed = 0
 local driver = CreateFrame("Frame")
@@ -65,10 +66,11 @@ local function OpenWindow()
   return QOL.moving
 end
 
+-- why the cursor is needed right now: "alt", "cards" (any phase but playing), "window", or nil
 local function CursorNeeded()
-  if db.altFree and IsAltKeyDown and IsAltKeyDown() then return true end
-  if Phase() ~= "playing" then return true end
-  return OpenWindow()
+  if db.altFree and IsAltKeyDown and IsAltKeyDown() then return "alt" end
+  if Phase() ~= "playing" then return "cards" end
+  if OpenWindow() then return "window" end
 end
 
 -- ---------------------------------------------------------------- pointer box
@@ -156,7 +158,8 @@ end
 -- next to the cards. Like action-camera games, the spot is a small plus a little above the
 -- middle of the screen, in front of the hero. While we wait for the cursor, a faint ring
 -- marks the spot.
-local CENTER_REACH = 40
+local CENTER_REACH = 70
+local WAIT_MAX = 2   -- seconds: after this, steer again even if the cursor never reached the spot
 local mark = CreateFrame("Frame", nil, UIParent)
 mark:SetFrameStrata("TOOLTIP")
 mark:SetWidth(64)
@@ -197,11 +200,11 @@ local function DrawPlus(size)
 end
 
 local spot = mark:CreateTexture(nil, "OVERLAY")
-spot:SetTexture(QOL.media .. "ring1")
+spot:SetTexture(QOL.media .. "ring2")
 spot:SetBlendMode("ADD")
-spot:SetVertexColor(1, 0.82, 0, 0.35)
-spot:SetWidth(CENTER_REACH * 1.5)
-spot:SetHeight(CENTER_REACH * 1.5)
+spot:SetVertexColor(1, 0.82, 0, 0.75)
+spot:SetWidth(CENTER_REACH)
+spot:SetHeight(CENTER_REACH)
 spot:SetPoint("CENTER", mark, "CENTER", 0, 0)
 spot:Hide()
 
@@ -240,25 +243,29 @@ end
 -- ---------------------------------------------------------------- frame loop
 -- Checked every frame, so steering lets go the moment cards or a window come up.
 local function Step()
-  if CursorNeeded() then
+  local why = CursorNeeded()
+  if why then
     Stop()
     Mark("off")
-    freedAt, freeX = GetTime(), nil
+    freedAt, freedFor, freeX = GetTime(), why, nil
     return
   end
   if holding then return end
-  -- cursor no longer needed: wait the delay, then for the cursor to reach the middle (or move)
-  if freedAt then
+  -- After Alt: steer again at once. After a window: after the short delay. After cards: after the
+  -- delay, then once the cursor is back at the aim spot (or has moved), at most 2 s later.
+  if freedAt and freedFor ~= "alt" then
     if GetTime() - freedAt < db.resumeDelay then Mark("off") return end
-    if db.resume == "center" then
-      if not NearMiddle() then Mark("wait") return end
-    elseif db.resume == "move" then
-      local x, y = GetCursorPosition()
-      if not freeX then freeX, freeY = x, y return end
-      if math.abs(x - freeX) + math.abs(y - freeY) < 12 then return end
+    if freedFor == "cards" then
+      if db.resume == "center" then
+        if not NearMiddle() and GetTime() - freedAt < db.resumeDelay + WAIT_MAX then Mark("wait") return end
+      elseif db.resume == "move" then
+        local x, y = GetCursorPosition()
+        if not freeX then freeX, freeY = x, y return end
+        if math.abs(x - freeX) + math.abs(y - freeY) < 12 then return end
+      end
     end
-    freedAt = nil
   end
+  freedAt, freedFor = nil, nil
   Start()
   Mark("on")
 end
@@ -307,7 +314,10 @@ QOL.Register({
       if db.spotX == 0 and db.spotY == 0 then db.spotY = 60 end
       db.spotV = 2
     end
-    freedAt = GetTime()
+    -- the hover info box used to be on by default; turn it off once
+    if db.spotV < 3 then db.pointer = false; db.spotV = 3 end
+    -- turning it on steers right away; only cards and windows make it wait
+    freedAt = nil
     driver:SetScript("OnUpdate", Tick)
   end,
   Disable = function()
@@ -320,11 +330,11 @@ QOL.Register({
   Page = function(P)
     local G = P:Group("After cards or a window")
     G:Radios("Steer again", "resume", { { "center", "When the cursor reaches the middle" }, { "move", "When I move the mouse" } })
-    G:Note("Middle is the smoothest: the cursor is always parked in the middle while you steer, so when cards pop up it is right there. A faint ring shows where to bring it back.")
+    G:Note("Middle is the smoothest: the cursor stays parked at the aim mark while you steer, so when cards pop up it is right there. A gold ring shows where to bring it back; after 2 seconds it steers again anyway.")
     G:Sliders({ { "resumeDelay", function(v) return "Wait at least: " .. v .. " s" end, 0, 1.5, 0.05, "Right away", "1.5 s" } })
     G:Done()
     G = P:Group("Cursor")
-    G:Checks({ { "Hold Alt to get the cursor back", "altFree" }, { "Pointer box", "pointer" } })
+    G:Checks({ { "Hold Alt to get the cursor back", "altFree" }, { "Show what I'm aiming at", "pointer" } })
     G:Checks({ { "Aim mark while steering", "centerMark" } })
     G:Sliders({ { "aimSize", function(v) return "Aim mark size: " .. v .. " px" end, 8, 40, 1, "Small", "Large" } })
     G:Sliders({
@@ -332,7 +342,7 @@ QOL.Register({
       { "spotY", function(v) return "Aim spot down / up: " .. v end, -300, 300, 5, "Down", "Up" },
     })
     G:Note("While steering, a small plus sits a little above the middle of the screen, in front of your character, like in action-camera games. Your cursor ring hides while you steer. Hold Alt to get the normal cursor back.")
-    G:Note("Steering hides the cursor. The pointer box shows what it is on: name, level and health. Move it with Move frames.")
+    G:Note("Show what I'm aiming at: a small box with the name, level and health of whatever the hidden cursor is on. Move it with Move frames.")
     G:Done()
   end,
 })
