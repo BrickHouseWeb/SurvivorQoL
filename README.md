@@ -12,7 +12,7 @@ Open the settings with **/qol** or the gear button on the minimap.
 - **Cursor**: six styles to find your mouse on a crowded screen (Halo, Reticle, Crosshair, Spotlight, Sonar, Laser lines), plus a trail.
 - **Steer Mode**: your hero turns with the mouse without holding right-click. Lets go for cards, windows, chat and Alt, and parks the cursor at an aim spot so cards are easy to click.
 - **Boss Targeting**: Tab targets nearby bosses and guardians first, and can target them by itself once they are close.
-- **Damage Meter**: makes the game's own damage meter bigger.
+- **Damage Meter**: bigger text on the game's own damage meter.
 
 ## Moving frames
 
