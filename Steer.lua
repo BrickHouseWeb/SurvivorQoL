@@ -32,8 +32,19 @@ end
 local function Start()
   if not Has("MouselookStart") then return end
   if holding and Looking() then return end
-  if pcall(MouselookStart) then holding = true; QOL.steering = true end
+  if pcall(MouselookStart) then
+    holding = true
+    QOL.steering = true
+    if db.noTooltips and GameTooltip:IsShown() then GameTooltip:Hide() end
+  end
 end
+
+-- no tooltips while steering: the hidden cursor still mouses over units and frames
+local tipOnShow = GameTooltip:GetScript("OnShow")
+GameTooltip:SetScript("OnShow", function()
+  if tipOnShow then tipOnShow() end
+  if QOL.steering and db and db.noTooltips then this:Hide() end
+end)
 
 local function Stop()
   if not holding then return end
@@ -309,7 +320,7 @@ QOL.Register({
   glyph = "g_steer",
   desc = "Your hero turns with the mouse without holding right-click. It lets go when you pick cards, open a window, chat or hold Alt. You can set a key for it in Key Bindings.",
   default = false,
-  defaults = { pointer = false, altFree = true, resumeDelay = 0.3, resume = "center", centerMark = true, spotX = 0, spotY = 40, aimSize = 16, aimThick = 1 },
+  defaults = { pointer = false, altFree = true, resumeDelay = 0.3, resume = "center", centerMark = true, spotX = 0, spotY = 40, aimSize = 16, aimThick = 1, noTooltips = true },
   Enable = function(mdb)
     db = mdb
     -- the first aim spot sat dead center; move it up in front of the hero once
@@ -343,6 +354,7 @@ QOL.Register({
     G:Done()
     G = P:Group("Cursor")
     G:Checks({ { "Hold Alt to get the cursor back", "altFree" }, { "Show what I'm aiming at", "pointer" } })
+    G:Checks({ { "No tooltips while steering", "noTooltips" } })
     G:Checks({ { "Aim mark while steering", "centerMark" } })
     G:Sliders({
       { "aimSize", function(v) return "Aim mark size: " .. v .. " px" end, 8, 40, 1, "Small", "Large" },
