@@ -318,7 +318,7 @@ QOL.Register({
   key = "steer",
   label = "Steer Mode",
   glyph = "g_steer",
-  desc = "Your hero turns with the mouse without holding right-click. It lets go when you pick cards, open a window, chat or hold Alt. You can set a key for it in Key Bindings.",
+  desc = "Turn with the mouse without holding right-click. It lets go for cards, windows and chat. Set a key for it in Key Bindings.",
   default = false,
   defaults = { pointer = false, altFree = true, resumeDelay = 0.3, resume = "center", centerMark = true, spotX = 0, spotY = 40, aimSize = 16, aimThick = 1, noTooltips = true },
   Enable = function(mdb)
@@ -347,25 +347,20 @@ QOL.Register({
   end,
   Apply = function() if not db.pointer then pointer:Hide() end end,
   Page = function(P)
-    local G = P:Group("After cards or a window")
-    G:Radios("Steer again", "resume", { { "center", "When the cursor reaches the middle" }, { "move", "When I move the mouse" } })
-    G:Note("Middle is the smoothest: the cursor stays parked at the aim mark while you steer, so when cards pop up it is right there. A gold ring shows where to bring it back; after 2 seconds it steers again anyway.")
-    G:Sliders({ { "resumeDelay", function(v) return "Wait at least: " .. v .. " s" end, 0, 1.5, 0.05, "Right away", "1.5 s" } })
+    local G = P:Group("While steering")
+    G:Checks({ { "Hold Alt to get the cursor back", "altFree" }, { "No tooltips", "noTooltips" } })
     G:Done()
-    G = P:Group("Cursor")
-    G:Checks({ { "Hold Alt to get the cursor back", "altFree" }, { "Show what I'm aiming at", "pointer" } })
-    G:Checks({ { "No tooltips while steering", "noTooltips" } })
-    G:Checks({ { "Aim mark while steering", "centerMark" } })
+    G = P:Group("Aim mark")
+    G:Checks({ { "Show a plus in front of my character", "centerMark" } })
     G:Sliders({
-      { "aimSize", function(v) return "Aim mark size: " .. v .. " px" end, 8, 40, 1, "Small", "Large" },
-      { "aimThick", function(v) return "Line thickness: " .. v .. " px" end, 1, 4, 1, "Thin", "Thick" },
+      { "aimSize", function(v) return "Size: " .. v .. " px" end, 8, 40, 1, "Small", "Large" },
+      { "aimThick", function(v) return "Thickness: " .. v .. " px" end, 1, 4, 1, "Thin", "Thick" },
     })
-    G:Sliders({
-      { "spotX", function(v) return "Aim spot left / right: " .. v end, -400, 400, 5, "Left", "Right" },
-      { "spotY", function(v) return "Aim spot down / up: " .. v end, -300, 300, 5, "Down", "Up" },
-    })
-    G:Note("While steering, a small plus sits a little above the middle of the screen, in front of your character, like in action-camera games. Your cursor ring hides while you steer. Hold Alt to get the normal cursor back.")
-    G:Note("Show what I'm aiming at: a small box with the name, level and health of whatever the hidden cursor is on. Move it with Move frames.")
+    G:Sliders({ { "spotY", function(v) return "Height: " .. v end, -200, 200, 5, "Lower", "Higher" } })
+    G:Done()
+    G = P:Group("After cards")
+    G:Radios(nil, "resume", { { "center", "Steer when the cursor is back at the plus" }, { "move", "Steer when I move the mouse" } })
+    G:Note("The first is the smoothest: the cursor waits at the plus, right where the cards appear.")
     G:Done()
   end,
 })

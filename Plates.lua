@@ -101,7 +101,7 @@ QOL.Register({
   key = "plates",
   label = "Plate Pass-Through",
   glyph = "g_plate",
-  desc = "Doesn't change how your nameplates look. It only lets right-click turning work when your mouse is on a nameplate, instead of the nameplate catching the click. Works with any nameplate addon.",
+  desc = "Right-click turning works even with your mouse on a nameplate. Doesn't change how nameplates look, and works with any nameplate addon.",
   default = true,
   defaults = { shift = true, onlyRun = false, friendly = true },
   Enable = function(mdb) db = mdb; driver:SetScript("OnUpdate", Tick) end,
@@ -112,10 +112,7 @@ QOL.Register({
   Page = function(P)
     local G = P:Group("Clicking a nameplate")
     G:Checks({ { "Hold Shift to click a nameplate", "shift" } })
-    G:Note("With this module on, clicking a nameplate does nothing. Hold Shift if you want to click one to target that enemy.")
-    G:Done()
-    G = P:Group("When")
-    G:Checks({ { "Only during a run", "onlyRun" }, { "Friendly nameplates too", "friendly" } })
+    G:Note("Hold Shift when you want to click a nameplate to target that enemy.")
     G:Done()
   end,
 })

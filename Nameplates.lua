@@ -135,8 +135,9 @@ local function Paint(st, kind, isTarget, calm)
   if isTarget then scale, alpha = math.max(scale, 1) * db.targetBoost, 1 end
   if own.scale ~= scale then own:SetScale(scale); own.scale = scale end
   if own.alpha ~= alpha then own:SetAlpha(alpha); own.alpha = alpha end
-  if own.w ~= db.width or own.h ~= db.height then
-    own:SetWidth(db.width); own:SetHeight(db.height); own.w, own.h = db.width, db.height
+  local w, h = math.floor(db.width * db.plateScale + 0.5), math.max(3, math.floor(db.height * db.plateScale + 0.5))
+  if own.w ~= w or own.h ~= h then
+    own:SetWidth(w); own:SetHeight(h); own.w, own.h = w, h
   end
   if own.fs ~= db.fontSize then
     own.label:SetFont(FONT, db.fontSize, "OUTLINE")
@@ -197,46 +198,28 @@ QOL.Register({
   key = "nameplates",
   label = "Nameplates",
   glyph = "g_crowd",
-  desc = "Our own enemy nameplates. Bosses and guardians are bigger, your target gets a gold border, and when lots of enemies are on screen the ordinary ones shrink and fade so the important ones stand out.",
+  desc = "Bosses and guardians get bigger plates, your target gets a gold border, and in busy fights the ordinary enemies shrink and fade.",
   default = true,
   defaults = { width = 110, height = 9, fontSize = 10, showName = true, showPercent = true,
     bossSize = 1.4, guardianSize = 1.25, eliteSize = 1.05, targetBoost = 1.15, targetGlow = true,
-    calm = true, threshold = 12, trashSize = 0.6, trashAlpha = 0.45, calmNames = true },
+    calm = true, threshold = 12, trashSize = 0.6, trashAlpha = 0.45, calmNames = true, plateScale = 1 },
   Enable = function(mdb) db = mdb; driver:SetScript("OnUpdate", Tick) end,
   Disable = function()
     driver:SetScript("OnUpdate", nil)
     for _, st in pairs(states) do Unblank(st) end
   end,
   Page = function(P)
-    local G = P:Group("Bar")
+    local G = P:Group("Look")
     G:Sliders({
-      { "width", function(v) return "Width: " .. v .. " px" end, 60, 200, 5, "Narrow", "Wide" },
-      { "height", function(v) return "Height: " .. v .. " px" end, 4, 20, 1, "Thin", "Tall" },
+      { "plateScale", function(v) return "Plate size: " .. math.floor(v * 100 + 0.5) .. "%" end, 0.6, 1.6, 0.05, "Small", "Large" },
+      { "fontSize", function(v) return "Text size: " .. v end, 7, 16, 1, "Small", "Large" },
     })
-    G:Sliders({ { "fontSize", function(v) return "Text size: " .. v end, 7, 16, 1, "Small", "Large" } })
-    G:Checks({ { "Show the name", "showName" }, { "Show health percent", "showPercent" } })
+    G:Checks({ { "Show health percent", "showPercent" }, { "Glow around my target", "targetGlow" } })
     G:Done()
-    G = P:Group("Size by enemy")
-    G:Sliders({
-      { "bossSize", function(v) return "Bosses: " .. math.floor(v * 100 + 0.5) .. "%" end, 0.8, 2, 0.05, "80%", "200%" },
-      { "guardianSize", function(v) return "Guardians: " .. math.floor(v * 100 + 0.5) .. "%" end, 0.8, 2, 0.05, "80%", "200%" },
-    })
-    G:Sliders({ { "eliteSize", function(v) return "Elites: " .. math.floor(v * 100 + 0.5) .. "%" end, 0.5, 1.6, 0.05, "50%", "160%" } })
-    G:Done()
-    G = P:Group("Your target")
-    G:Checks({ { "Glow around my target", "targetGlow" } })
-    G:Sliders({ { "targetBoost", function(v) return "Target size: +" .. math.floor((v - 1) * 100 + 0.5) .. "%" end, 1, 1.5, 0.05, "Same", "+50%" } })
-    G:Note("Your target always gets a thick gold border and stays fully visible.")
-    G:Done()
-    G = P:Group("Calm crowds")
+    G = P:Group("Busy fights")
     G:Checks({ { "Shrink ordinary enemies when it gets busy", "calm" } })
-    G:Sliders({ { "threshold", function(v) return v == 0 and "Always" or ("Start at " .. v .. " enemies on screen") end, 0, 50, 1, "Always", "50" } })
-    G:Sliders({
-      { "trashSize", function(v) return "Their size: " .. math.floor(v * 100 + 0.5) .. "%" end, 0.3, 1, 0.05, "Tiny", "Normal" },
-      { "trashAlpha", function(v) return "Visible: " .. math.floor(v * 100 + 0.5) .. "%" end, 0.1, 1, 0.05, "Faint", "Solid" },
-    })
-    G:Checks({ { "Keep names on ordinary enemies", "calmNames" } })
-    G:Note("While it is busy, ordinary enemies hide their health percent (and their name if the box above is off). Bosses, guardians, elites and your target never shrink.")
+    G:Sliders({ { "threshold", function(v) return v == 0 and "Always" or ("Start at " .. v .. " enemies") end, 0, 50, 1, "Always", "50" } })
+    G:Note("Bosses, guardians, elites and your target always stay big.")
     G:Done()
   end,
 })

@@ -105,13 +105,14 @@ local function PlateNames()
   return any and names or nil
 end
 
--- the bosses and guardians near you, most important first
-local function Near(list)
+-- the bosses and guardians near you, most important first. useLair: guardians also count within
+-- reach of their lair (auto-target only; Tab never reaches past what you could normally target)
+local function Near(list, useLair)
   local plates, near = PlateNames(), {}
   for i = 1, table.getn(list) do
     local name = list[i].name
     local d = LairDist(name)
-    if (plates and plates[name]) or (d and d <= db.reach) then table.insert(near, list[i]) end
+    if (plates and plates[name]) or (useLair and d and d <= db.reach) then table.insert(near, list[i]) end
   end
   return near, plates
 end
@@ -131,8 +132,8 @@ end
 
 -- the best thing to target right now: the first near one, or with nameplates off, the most
 -- important one if it turns out to be close
-local function Best(list, after)
-  local near, plates = Near(list)
+local function Best(list, after, useLair)
+  local near, plates = Near(list, useLair)
   local n = table.getn(near)
   if n > 0 then
     local i = Index(near, after)
@@ -173,7 +174,7 @@ local function Tick()
   local has = UnitExists("target") and not UnitIsDead("target")
   if has and Index(list, UnitName("target")) then return end
   if db.auto == "notarget" and has then return end
-  local name, check = Best(list, nil)
+  local name, check = Best(list, nil, true)
   -- nothing near, or it didn't stick: wait a bit before looking again
   if not name or not Pick(name, check) then nextTry = GetTime() + 1 end
 end
@@ -182,7 +183,7 @@ QOL.Register({
   key = "bosses",
   label = "Boss Targeting",
   glyph = "g_skull",
-  desc = "Tab targets the boss or guardian instead of the nearest enemy. It can also target one by itself once it is close enough. When none is up, Tab works as normal.",
+  desc = "Tab grabs the boss or guardian near you instead of the nearest enemy. When none is near, Tab works as normal.",
   default = true,
   defaults = { tab = true, guardians = true, elites = false, auto = "always", reach = 40 },
   Enable = function(mdb)
@@ -191,18 +192,14 @@ QOL.Register({
   end,
   Disable = function() driver:SetScript("OnUpdate", nil) end,
   Page = function(P)
-    local G = P:Group("Who counts")
-    G:Note("Bosses and the final boss always count.")
-    G:Checks({ { "Guardians", "guardians" }, { "Elites", "elites" } })
-    G:Done()
-    G = P:Group("Tab key")
-    G:Checks({ { "Tab targets them first", "tab" } })
-    G:Note("Only ones near you count: their nameplate is on screen, or you are within Guardian reach of a guardian's lair. Press Tab again to step to the next one.")
+    local G = P:Group("Tab key")
+    G:Checks({ { "Tab targets nearby bosses and guardians first", "tab" } })
+    G:Checks({ { "Elites count too", "elites" } })
     G:Done()
     G = P:Group("Target by itself")
-    G:Radios(nil, "auto", { { "off", "Off" }, { "notarget", "Only if I have no target" }, { "always", "Always" } })
+    G:Radios(nil, "auto", { { "off", "Off" }, { "notarget", "When I have no target" }, { "always", "Always" } })
     G:Sliders({ { "reach", function(v) return "Guardian reach: " .. v .. " yd" end, 10, 80, 5, "10 yd", "80 yd" } })
-    G:Note("Targets one once its nameplate is on screen, or once you are this close to a guardian's lair so you can tag it early. Always also switches away from a normal enemy you targeted.")
+    G:Note("A boss or guardian counts once its nameplate is on screen. Guardians also count once you are within reach of their lair, so you can tag them early.")
     G:Done()
   end,
 })

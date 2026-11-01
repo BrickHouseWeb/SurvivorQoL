@@ -176,7 +176,7 @@ QOL.Register({
   key = "stats",
   label = "Stats Panel",
   glyph = "g_chart",
-  desc = "Your main stats during a run. When a pick changes a stat, the difference shows next to it for a few seconds.",
+  desc = "Your main stats during a run. When a pick changes one, you see by how much.",
   default = true,
   defaults = { show = defaultShow, flash = true, flashTime = 5, top = true, hideOutside = true, scale = 1, alpha = 0.9 },
   Enable = function(mdb)
@@ -210,14 +210,8 @@ QOL.Register({
     end
     G:Done()
     G = P:Group("Panel")
-    G:Checks({ { "Show the change next to a stat", "flash" }, { "Keep over the level-up cards", "top" }, { "Hide outside a run", "hideOutside" } })
-    G:Sliders({
-      { "flashTime", function(v) return "Change shows for: " .. v .. " s" end, 1, 10, 1, "1 s", "10 s" },
-      { "scale", function(v) return "Scale: " .. math.floor(v * 100 + 0.5) .. "%" end, 0.5, 1.5, 0.05, "50%", "150%" },
-    })
-    G:Sliders({
-      { "alpha", function(v) return "Background: " .. math.floor(v * 100 + 0.5) .. "%" end, 0, 1, 0.05, "Clear", "Solid" },
-    })
+    G:Checks({ { "Show the change next to a stat", "flash" }, { "Hide outside a run", "hideOutside" } })
+    G:Sliders({ { "scale", function(v) return "Size: " .. math.floor(v * 100 + 0.5) .. "%" end, 0.5, 1.5, 0.05, "50%", "150%" } })
     G:Done()
   end,
 })

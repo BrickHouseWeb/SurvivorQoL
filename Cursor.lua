@@ -313,21 +313,15 @@ QOL.Register({
       { "size", function(v) return "Size: " .. v .. " px" end, 20, 120, 2, "Small", "Large" },
       { "thickness", function(v) return "Thickness: " .. ({ "Thin", "Medium", "Thick" })[v] end, 1, 3, 1, "Thin", "Thick" },
     })
-    G:Sliders({ { "opacity", function(v) return "Opacity: " .. math.floor(v * 100 + 0.5) .. "%" end, 0.2, 1, 0.05, "Faint", "Solid" } })
     G:Swatches("Color", "color", { { 1, 0.82, 0 }, { 1, 1, 1 }, { 1, 0.3, 0.3 }, { 0.25, 0.83, 0.42 }, { 0.3, 0.65, 1 }, { 0.7, 0.42, 1 } })
     local cc = G:Check("Use my class color", "classColor")
     cc:SetPoint("TOPLEFT", G.box, "TOPLEFT", G.swatchEnd + 8, G.swatchY + 3)
     G:Done()
     G = P:Group("Trail")
     G:Radios(nil, "trail", { { "off", "Off" }, { "glow", "Glow" }, { "comet", "Comet" }, { "sparkles", "Sparkles" } })
-    G:Sliders({
-      { "trailLen", function(v) return "Length: " .. v .. " s" end, 0.1, 1, 0.05, "Short", "Long" },
-      { "trailWidth", function(v) return "Width: " .. v .. " px" end, 4, 30, 1, "Thin", "Wide" },
-    })
     G:Done()
     G = P:Group("Extras")
-    G:Checks({ { "Shake the mouse to find it", "shake" }, { "Bigger while in combat", "combatBig" },
-      { "Hide while turning", "hideTurning" }, { "Only during a run", "onlyRun" } })
+    G:Checks({ { "Shake the mouse to find it", "shake" }, { "Hide while turning", "hideTurning" } })
     G:Done()
   end,
 })
