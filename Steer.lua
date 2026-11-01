@@ -181,8 +181,8 @@ for i = 1, 4 do
   plus.outline[i] = Arm("ARTWORK", 0, 0, 0)
   plus.fill[i] = Arm("OVERLAY", 1, 0.82, 0)
 end
-local function DrawPlus(size)
-  local len, gap, w = math.floor(size * 0.38 + 0.5), math.max(2, math.floor(size * 0.12 + 0.5)), 2
+local function DrawPlus(size, w)
+  local len, gap = math.floor(size * 0.38 + 0.5), math.max(2, math.floor(size * 0.12 + 0.5))
   -- arm i: left, right, up, down from the middle
   local dirs = { { -1, 0 }, { 1, 0 }, { 0, 1 }, { 0, -1 } }
   for i = 1, 4 do
@@ -224,7 +224,10 @@ local function Mark(state)
     mark:SetPoint("CENTER", WorldFrame, "CENTER", db.spotX, db.spotY)
     mark.x, mark.y = db.spotX, db.spotY
   end
-  if mark.size ~= db.aimSize then DrawPlus(db.aimSize); mark.size = db.aimSize end
+  if mark.size ~= db.aimSize or mark.thick ~= db.aimThick then
+    DrawPlus(db.aimSize, db.aimThick)
+    mark.size, mark.thick = db.aimSize, db.aimThick
+  end
   local showPlus = state == "on" and db.centerMark
   for i = 1, table.getn(arms) do
     if showPlus then arms[i]:Show() else arms[i]:Hide() end
@@ -306,7 +309,7 @@ QOL.Register({
   glyph = "g_steer",
   desc = "Your hero turns with the mouse without holding right-click. It lets go when you pick cards, open a window, chat or hold Alt. You can set a key for it in Key Bindings.",
   default = false,
-  defaults = { pointer = false, altFree = true, resumeDelay = 0.3, resume = "center", centerMark = true, spotX = 0, spotY = 60, aimSize = 16 },
+  defaults = { pointer = false, altFree = true, resumeDelay = 0.3, resume = "center", centerMark = true, spotX = 0, spotY = 40, aimSize = 16, aimThick = 1 },
   Enable = function(mdb)
     db = mdb
     -- the first aim spot sat dead center; move it up in front of the hero once
@@ -316,6 +319,11 @@ QOL.Register({
     end
     -- the hover info box used to be on by default; turn it off once
     if db.spotV < 3 then db.pointer = false; db.spotV = 3 end
+    -- the default spot moved down from 60 to 40
+    if db.spotV < 4 then
+      if db.spotY == 60 then db.spotY = 40 end
+      db.spotV = 4
+    end
     -- turning it on steers right away; only cards and windows make it wait
     freedAt = nil
     driver:SetScript("OnUpdate", Tick)
@@ -336,7 +344,10 @@ QOL.Register({
     G = P:Group("Cursor")
     G:Checks({ { "Hold Alt to get the cursor back", "altFree" }, { "Show what I'm aiming at", "pointer" } })
     G:Checks({ { "Aim mark while steering", "centerMark" } })
-    G:Sliders({ { "aimSize", function(v) return "Aim mark size: " .. v .. " px" end, 8, 40, 1, "Small", "Large" } })
+    G:Sliders({
+      { "aimSize", function(v) return "Aim mark size: " .. v .. " px" end, 8, 40, 1, "Small", "Large" },
+      { "aimThick", function(v) return "Line thickness: " .. v .. " px" end, 1, 4, 1, "Thin", "Thick" },
+    })
     G:Sliders({
       { "spotX", function(v) return "Aim spot left / right: " .. v end, -400, 400, 5, "Left", "Right" },
       { "spotY", function(v) return "Aim spot down / up: " .. v end, -300, 300, 5, "Down", "Up" },
