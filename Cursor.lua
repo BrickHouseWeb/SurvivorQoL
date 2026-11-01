@@ -190,7 +190,7 @@ local function Tick()
     return
   end
   if centered then
-    x, y = UIParent:GetWidth() / 2, UIParent:GetHeight() / 2
+    x, y = QOL.SteerSpot()
     HideTrail()
     trailX = nil
   end

@@ -150,19 +150,78 @@ local function UpdatePointer()
   end
 end
 
+-- ---------------------------------------------------------------- middle of the screen
+-- Mouselook freezes the hidden cursor where steering started, and the cursor comes back there
+-- when cards show up. Starting steering only once the cursor is in the middle keeps that spot
+-- in the middle, next to the cards. While we wait for it, a faint ring marks the spot; while
+-- steering, a small reticle sits there (the Cursor module draws its own style there instead).
+local CENTER_REACH = 50
+local mark = CreateFrame("Frame", nil, UIParent)
+mark:SetFrameStrata("TOOLTIP")
+mark:SetAllPoints(UIParent)
+mark:EnableMouse(false)
+local aim = mark:CreateTexture(nil, "OVERLAY")
+aim:SetTexture(QOL.media .. "reticle")
+aim:SetBlendMode("ADD")
+aim:SetVertexColor(1, 0.82, 0, 0.9)
+aim:SetWidth(26)
+aim:SetHeight(26)
+aim:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+local spot = mark:CreateTexture(nil, "OVERLAY")
+spot:SetTexture(QOL.media .. "ring1")
+spot:SetBlendMode("ADD")
+spot:SetVertexColor(1, 0.82, 0, 0.45)
+spot:SetWidth(CENTER_REACH * 2)
+spot:SetHeight(CENTER_REACH * 2)
+spot:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+aim:Hide()
+spot:Hide()
+
+-- the aim spot in UIParent units: the middle of the screen, nudged by the page's sliders
+-- (for a character that the camera does not keep dead center)
+function QOL.SteerSpot()
+  local x, y = UIParent:GetWidth() / 2, UIParent:GetHeight() / 2
+  if db then x, y = x + db.spotX, y + db.spotY end
+  return x, y
+end
+
+-- "on": steering, "wait": waiting for the cursor to reach the spot, "off": neither
+local function Mark(state)
+  local cx, cy = QOL.SteerSpot()
+  if aim.x ~= cx or aim.y ~= cy then
+    aim:ClearAllPoints(); aim:SetPoint("CENTER", UIParent, "BOTTOMLEFT", cx, cy)
+    spot:ClearAllPoints(); spot:SetPoint("CENTER", UIParent, "BOTTOMLEFT", cx, cy)
+    aim.x, aim.y = cx, cy
+  end
+  local cursor = QOL.Module("cursor")
+  if state == "on" and db.centerMark and not (cursor and QOL.IsOn(cursor)) then aim:Show() else aim:Hide() end
+  if state == "wait" then spot:Show() else spot:Hide() end
+end
+
+local function NearMiddle()
+  local s = UIParent:GetEffectiveScale()
+  local x, y = GetCursorPosition()
+  local cx, cy = QOL.SteerSpot()
+  local dx, dy = x / s - cx, y / s - cy
+  return dx * dx + dy * dy <= CENTER_REACH * CENTER_REACH
+end
+
 -- ---------------------------------------------------------------- frame loop
 -- Checked every frame, so steering lets go the moment cards or a window come up.
 local function Step()
   if CursorNeeded() then
     Stop()
+    Mark("off")
     freedAt, freeX = GetTime(), nil
     return
   end
   if holding then return end
-  -- cursor no longer needed: wait the delay, then (optionally) for the mouse to move
+  -- cursor no longer needed: wait the delay, then for the cursor to reach the middle (or move)
   if freedAt then
-    if GetTime() - freedAt < db.resumeDelay then return end
-    if db.resumeOnMove then
+    if GetTime() - freedAt < db.resumeDelay then Mark("off") return end
+    if db.resume == "center" then
+      if not NearMiddle() then Mark("wait") return end
+    elseif db.resume == "move" then
       local x, y = GetCursorPosition()
       if not freeX then freeX, freeY = x, y return end
       if math.abs(x - freeX) + math.abs(y - freeY) < 12 then return end
@@ -170,7 +229,7 @@ local function Step()
     freedAt = nil
   end
   Start()
-  if QOL.SteerShowMark then QOL.SteerShowMark() end
+  Mark("on")
 end
 
 local function Tick()
@@ -195,31 +254,7 @@ ev:SetScript("OnEvent", function()
   if event == "PLAYER_LEAVING_WORLD" then Stop() else pcall(UpdatePointer) end
 end)
 
--- While steering, an aim mark in the middle of the screen: the Cursor module draws its own style
--- there when it is on; otherwise this small reticle does.
-local mark = CreateFrame("Frame", nil, UIParent)
-mark:SetFrameStrata("TOOLTIP")
-mark:SetWidth(26)
-mark:SetHeight(26)
-mark:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
-mark:EnableMouse(false)
-local markTex = mark:CreateTexture(nil, "OVERLAY")
-markTex:SetTexture(QOL.media .. "reticle")
-markTex:SetBlendMode("ADD")
-markTex:SetVertexColor(1, 0.82, 0, 0.9)
-markTex:SetAllPoints(mark)
-mark:Hide()
-mark:SetScript("OnUpdate", function()
-  local cursor = QOL.Module("cursor")
-  if not (holding and db and db.centerMark) or (cursor and QOL.IsOn(cursor)) then this:Hide() end
-end)
-
 function QOL.SteerCenter() return db and db.centerMark end
-
-function QOL.SteerShowMark()
-  local cursor = QOL.Module("cursor")
-  if holding and db.centerMark and not (cursor and QOL.IsOn(cursor)) then mark:Show() end
-end
 
 -- key binding (Bindings.xml): turn Steer mode on or off
 BINDING_HEADER_SURVIVORQOL = "Survivor QoL"
@@ -235,7 +270,7 @@ QOL.Register({
   glyph = "g_steer",
   desc = "Your hero turns with the mouse without holding right-click. It lets go when you pick cards, open a window, chat or hold Alt. You can set a key for it in Key Bindings.",
   default = false,
-  defaults = { pointer = true, altFree = true, resumeDelay = 0.3, resumeOnMove = true, centerMark = true },
+  defaults = { pointer = true, altFree = true, resumeDelay = 0.3, resume = "center", centerMark = true, spotX = 0, spotY = 0 },
   Enable = function(mdb)
     db = mdb
     freedAt = GetTime()
@@ -249,14 +284,18 @@ QOL.Register({
   Apply = function() if not db.pointer then pointer:Hide() end end,
   Page = function(P)
     local G = P:Group("After cards or a window")
-    G:Checks({ { "Wait until I move the mouse", "resumeOnMove" } })
+    G:Radios("Steer again", "resume", { { "center", "When the cursor reaches the middle" }, { "move", "When I move the mouse" } })
+    G:Note("Middle is the smoothest: the cursor is always parked in the middle while you steer, so when cards pop up it is right there. A faint ring shows where to bring it back.")
     G:Sliders({ { "resumeDelay", function(v) return "Wait at least: " .. v .. " s" end, 0, 1.5, 0.05, "Right away", "1.5 s" } })
-    G:Note("Steering comes back only after this, so clicking a card doesn't snap your view.")
     G:Done()
     G = P:Group("Cursor")
     G:Checks({ { "Hold Alt to get the cursor back", "altFree" }, { "Pointer box", "pointer" } })
-    G:Checks({ { "Aim mark in the middle of the screen", "centerMark" } })
-    G:Note("While steering, a mark sits in the middle of the screen. If the Cursor module is on, it uses your cursor style. Hold Alt to get the normal cursor back.")
+    G:Checks({ { "Aim mark while steering", "centerMark" } })
+    G:Sliders({
+      { "spotX", function(v) return "Aim spot left / right: " .. v end, -400, 400, 5, "Left", "Right" },
+      { "spotY", function(v) return "Aim spot down / up: " .. v end, -300, 300, 5, "Down", "Up" },
+    })
+    G:Note("While steering, a mark sits at the aim spot (your cursor style if the Cursor module is on). Move the spot onto your character if the camera doesn't keep it in the middle. Hold Alt to get the normal cursor back.")
     G:Note("Steering hides the cursor. The pointer box shows what it is on: name, level and health. Move it with Move frames.")
     G:Done()
   end,
