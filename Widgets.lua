@@ -317,10 +317,13 @@ function UI.Radio(parent, label)
       self:SetBackdropColor(1, 0.82, 0, 0.95)
       self:SetBackdropBorderColor(1, 0.9, 0.4, 1)
       t:SetTextColor(0.1, 0.07, 0)
+      -- dark text on gold: the font's black drop shadow would smear it
+      t:SetShadowOffset(0, 0)
     else
       self:SetBackdropColor(0.12, 0.11, 0.1, 0.95)
       self:SetBackdropBorderColor(0.37, 0.35, 0.32, 1)
       t:SetTextColor(0.75, 0.75, 0.75)
+      t:SetShadowOffset(1, -1)
     end
   end
   b:SetOn(false)
