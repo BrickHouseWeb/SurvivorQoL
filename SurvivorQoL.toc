@@ -1,6 +1,6 @@
 ## Interface: 11200
 ## Title: |cffe8dfc8Survivor|r|cffffd100QoL|r
-## Notes: Azeroth Survivors: quality-of-life modules you turn on and off with /qol or the minimap button. Nameplates, plate pass-through, stats panel, cursor, steer mode and boss targeting.
+## Notes: Azeroth Survivors: quality-of-life modules you turn on and off with /qol or the minimap button. Nameplates, plate pass-through, stats panel, cursor, steer mode, boss targeting and damage meter size.
 ## Author: Brick House Web Design
 ## Version: 0.2.0
 ## SavedVariables: SurvivorQoLDB
@@ -13,5 +13,6 @@ Stats.lua
 Cursor.lua
 Steer.lua
 Bosses.lua
+Meter.lua
 Options.lua
 Minimap.lua

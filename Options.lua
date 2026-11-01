@@ -255,5 +255,23 @@ SlashCmdList["SURVIVORQOL"] = function(msg)
   msg = string.lower(msg or "")
   if msg == "move" then QOL.MoveMode(true) return end
   if msg == "stats all" and QOL.StatsFields then QOL.StatsFields() return end
+  -- /qol find <word>: names of shown frames containing the word, to hook into the game's own UI
+  local _, _, word = string.find(msg, "^find%s+(%S+)")
+  if word then
+    local n = 0
+    for name, f in pairs(getfenv(0)) do
+      if type(name) == "string" and type(f) == "table" and f.IsShown and f.GetObjectType
+        and string.find(string.lower(name), word, 1, true) then
+        local ok, shown = pcall(f.IsShown, f)
+        if ok and shown and n < 40 then
+          n = n + 1
+          local ok2, kind = pcall(f.GetObjectType, f)
+          QOL.Print(name .. " (" .. tostring(ok2 and kind) .. ")")
+        end
+      end
+    end
+    QOL.Print(n == 0 and ("no shown frames with \"" .. word .. "\" in the name.") or (n .. " found."))
+    return
+  end
   QOL.ToggleWindow()
 end
