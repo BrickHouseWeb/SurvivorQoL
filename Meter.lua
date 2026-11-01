@@ -52,13 +52,13 @@ QOL.Register({
   glyph = "g_meter",
   desc = "Bigger text on the game's own damage meter. Turn the meter on in the game's settings first.",
   default = true,
-  defaults = { textScale = 1.35 },
+  defaults = { textScale = 1.7 },
   Enable = function(mdb) db = mdb; wait = 1; driver:SetScript("OnUpdate", Tick) end,
   Disable = function() driver:SetScript("OnUpdate", nil); Restore() end,
   Apply = function() wait = 1 end,
   Page = function(P)
     local G = P:Group("Text")
-    G:Sliders({ { "textScale", function(v) return "Text size: " .. math.floor(v * 100 + 0.5) .. "%" end, 0.8, 2, 0.05, "80%", "200%" } })
+    G:Sliders({ { "textScale", function(v) return "Text size: " .. math.floor(v * 100 + 0.5) .. "%" end, 1, 3, 0.05, "100%", "300%" } })
     G:Note("Only the text gets bigger; the meter keeps its size. Very large text can get cut off in its rows.")
     G:Done()
   end,
