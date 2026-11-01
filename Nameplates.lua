@@ -179,24 +179,60 @@ local function Paint(st, kind, isTarget, calm)
   own:Show()
 end
 
+-- The one plate that is your target. A plate only knows its name and health bar, so several
+-- enemies with your target's name all look alike: keep those whose health matches the target's
+-- too, stay on the plate picked last time while it still matches, and otherwise take the one
+-- nearest the middle of the screen (where your hero is, and where Tab looks first).
+local lastTarget
+local targetEvents = CreateFrame("Frame")
+targetEvents:RegisterEvent("PLAYER_TARGET_CHANGED")
+targetEvents:SetScript("OnEvent", function() lastTarget = nil end)
+
+local function TargetPlate(plates)
+  if not UnitExists("target") or UnitIsDead("target") then lastTarget = nil return nil end
+  local tName = UnitName("target")
+  local tMax = UnitHealthMax("target") or 0
+  local tFrac = tMax > 0 and (UnitHealth("target") or 0) / tMax or nil
+  local cx, cy = WorldFrame:GetCenter()
+  local best, bestDist
+  for plate in pairs(plates) do
+    local st = states[plate]
+    if st and plate:IsShown() and st.name:GetText() == tName then
+      local low, high = st.bar:GetMinMaxValues()
+      local match = true
+      if tFrac and high and high > low then
+        match = math.abs((st.bar:GetValue() - low) / (high - low) - tFrac) < 0.02
+      end
+      if match then
+        if plate == lastTarget then return plate end
+        local px, py = plate:GetCenter()
+        local dist = px and ((px - cx) * (px - cx) + (py - cy) * (py - cy)) or 1e12
+        if not best or dist < bestDist then best, bestDist = plate, dist end
+      end
+    end
+  end
+  lastTarget = best
+  return best
+end
+
 local function Tick()
   wait = wait + (arg1 or 0)
   if wait < 0.05 then return end
   wait = 0
   local plates = QOL.PlateList()
   local kinds = Kinds()
-  local tName = UnitExists("target") and UnitName("target")
   local shown = 0
   for plate in pairs(plates) do
     if plate:IsShown() and not QOL.PlateIsFriendly(plate) then shown = shown + 1 end
   end
   local calm = db.calm and shown >= db.threshold
+  local targetPlate = TargetPlate(plates)
   for plate in pairs(plates) do
     local st = states[plate] or Learn(plate)
     if st then
       if plate:IsShown() and not QOL.PlateIsFriendly(plate) then
         local name = st.name:GetText()
-        Paint(st, kinds[name or ""] or "normal", tName and name == tName, calm)
+        Paint(st, kinds[name or ""] or "normal", plate == targetPlate, calm)
       else
         Unblank(st)
       end
