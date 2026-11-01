@@ -269,7 +269,7 @@ local function Step()
   -- delay, then once the cursor is back at the aim spot (or has moved), at most 2 s later.
   if freedAt and freedFor ~= "alt" then
     if GetTime() - freedAt < db.resumeDelay then Mark("off") return end
-    if freedFor == "cards" then
+    if freedFor == "cards" and db.resume ~= "instant" then
       if db.resume == "center" then
         if not NearMiddle() and GetTime() - freedAt < db.resumeDelay + WAIT_MAX then Mark("wait") return end
       elseif db.resume == "move" then
@@ -320,7 +320,7 @@ QOL.Register({
   glyph = "g_steer",
   desc = "Turn with the mouse without holding right-click. It lets go for cards, windows and chat. Set a key for it in Key Bindings.",
   default = false,
-  defaults = { pointer = false, altFree = true, resumeDelay = 0.3, resume = "center", centerMark = true, spotX = 0, spotY = 40, aimSize = 16, aimThick = 1, noTooltips = true },
+  defaults = { pointer = false, altFree = true, resumeDelay = 0, resume = "instant", centerMark = true, spotX = 0, spotY = 40, aimSize = 16, aimThick = 1, noTooltips = true },
   Enable = function(mdb)
     db = mdb
     -- the first aim spot sat dead center; move it up in front of the hero once
@@ -334,6 +334,12 @@ QOL.Register({
     if db.spotV < 4 then
       if db.spotY == 60 then db.spotY = 40 end
       db.spotV = 4
+    end
+    -- steering now comes back right away after cards
+    if db.spotV < 5 then
+      if db.resume == "center" then db.resume = "instant" end
+      db.resumeDelay = 0
+      db.spotV = 5
     end
     -- turning it on steers right away; only cards and windows make it wait
     freedAt = nil
@@ -359,8 +365,8 @@ QOL.Register({
     G:Sliders({ { "spotY", function(v) return "Height: " .. v end, -200, 200, 5, "Lower", "Higher" } })
     G:Done()
     G = P:Group("After cards")
-    G:Radios(nil, "resume", { { "center", "Steer when the cursor is back at the plus" }, { "move", "Steer when I move the mouse" } })
-    G:Note("The first is the smoothest: the cursor waits at the plus, right where the cards appear.")
+    G:Radios(nil, "resume", { { "instant", "Right away" }, { "center", "When the cursor is back at the plus" }, { "move", "When I move the mouse" } })
+    G:Note("When steering comes back after you pick a card.")
     G:Done()
   end,
 })
