@@ -208,20 +208,21 @@ spot:SetHeight(CENTER_REACH)
 spot:SetPoint("CENTER", mark, "CENTER", 0, 0)
 spot:Hide()
 
--- the aim spot in UIParent units: the middle of the screen, raised and nudged by the sliders
-function QOL.SteerSpot()
-  local x, y = UIParent:GetWidth() / 2, UIParent:GetHeight() / 2
-  if db then x, y = x + db.spotX, y + db.spotY end
-  return x, y
+-- The aim spot is measured from WorldFrame, the game's 3D view, not UIParent: the camera keeps
+-- the hero in the middle of WorldFrame, and on some setups UIParent does not cover the same area.
+-- It sits a little above that middle, nudged by the sliders (in UI units).
+local function SpotPixels()
+  local wx, wy = WorldFrame:GetCenter()
+  local ws, us = WorldFrame:GetEffectiveScale(), UIParent:GetEffectiveScale()
+  return wx * ws + db.spotX * us, wy * ws + db.spotY * us
 end
 
 -- "on": steering, "wait": waiting for the cursor to reach the spot, "off": neither
 local function Mark(state)
-  local cx, cy = QOL.SteerSpot()
-  if mark.x ~= cx or mark.y ~= cy then
+  if mark.x ~= db.spotX or mark.y ~= db.spotY then
     mark:ClearAllPoints()
-    mark:SetPoint("CENTER", UIParent, "BOTTOMLEFT", cx, cy)
-    mark.x, mark.y = cx, cy
+    mark:SetPoint("CENTER", WorldFrame, "CENTER", db.spotX, db.spotY)
+    mark.x, mark.y = db.spotX, db.spotY
   end
   if mark.size ~= db.aimSize then DrawPlus(db.aimSize); mark.size = db.aimSize end
   local showPlus = state == "on" and db.centerMark
@@ -233,11 +234,10 @@ local function Mark(state)
 end
 
 local function NearMiddle()
-  local s = UIParent:GetEffectiveScale()
   local x, y = GetCursorPosition()
-  local cx, cy = QOL.SteerSpot()
-  local dx, dy = x / s - cx, y / s - cy
-  return dx * dx + dy * dy <= CENTER_REACH * CENTER_REACH
+  local cx, cy = SpotPixels()
+  local reach = CENTER_REACH * UIParent:GetEffectiveScale()
+  return (x - cx) * (x - cx) + (y - cy) * (y - cy) <= reach * reach
 end
 
 -- ---------------------------------------------------------------- frame loop

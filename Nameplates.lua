@@ -159,7 +159,7 @@ local function Paint(st, kind, isTarget, calm)
   own.health:SetStatusBarColor(BarColor(st.bar:GetStatusBarColor()))
   local t = TINT[kind] or TINT.normal
   local text = ""
-  if db.showName and (kind ~= "normal" or not calm or isTarget) then text = st.name:GetText() or "" end
+  if db.showName and (db.calmNames or kind ~= "normal" or not calm or isTarget) then text = st.name:GetText() or "" end
   own.label:SetText(text)
   own.label:SetTextColor(t[1], t[2], t[3])
   local pct = ""
@@ -201,7 +201,7 @@ QOL.Register({
   default = true,
   defaults = { width = 110, height = 9, fontSize = 10, showName = true, showPercent = true,
     bossSize = 1.4, guardianSize = 1.25, eliteSize = 1.05, targetBoost = 1.15, targetGlow = true,
-    calm = true, threshold = 12, trashSize = 0.6, trashAlpha = 0.45 },
+    calm = true, threshold = 12, trashSize = 0.6, trashAlpha = 0.45, calmNames = true },
   Enable = function(mdb) db = mdb; driver:SetScript("OnUpdate", Tick) end,
   Disable = function()
     driver:SetScript("OnUpdate", nil)
@@ -235,7 +235,8 @@ QOL.Register({
       { "trashSize", function(v) return "Their size: " .. math.floor(v * 100 + 0.5) .. "%" end, 0.3, 1, 0.05, "Tiny", "Normal" },
       { "trashAlpha", function(v) return "Visible: " .. math.floor(v * 100 + 0.5) .. "%" end, 0.1, 1, 0.05, "Faint", "Solid" },
     })
-    G:Note("While it is busy, ordinary enemies also hide their name and percent. Bosses, guardians, elites and your target never shrink.")
+    G:Checks({ { "Keep names on ordinary enemies", "calmNames" } })
+    G:Note("While it is busy, ordinary enemies hide their health percent (and their name if the box above is off). Bosses, guardians, elites and your target never shrink.")
     G:Done()
   end,
 })
