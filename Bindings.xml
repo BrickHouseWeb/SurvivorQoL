@@ -1,0 +1,5 @@
+<Bindings>
+  <Binding name="SURVIVORQOL_STEER" header="SURVIVORQOL">
+    QOL.ToggleSteer()
+  </Binding>
+</Bindings>
