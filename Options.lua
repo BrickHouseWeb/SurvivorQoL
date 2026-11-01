@@ -165,12 +165,11 @@ local function ModulePage(m)
   return P
 end
 
--- the panel fits the page up to what the screen allows (window chrome is 98 px, plus a margin);
--- past that the page scrolls
+-- one fixed panel height for every page, so the window never jumps when you switch pages:
+-- 600 px, or less on a short screen (window chrome is 98 px, plus a margin). Longer pages scroll.
 local function Layout(P)
   local listH = table.getn(QOL.modules) * 27 + 39
-  local maxH = math.max(listH + 60, UIParent:GetHeight() - 98 - 80)
-  local h = math.min(math.max(P.y + 26, listH + 50), maxH)
+  local h = math.max(listH + 60, math.min(600, UIParent:GetHeight() - 98 - 80))
   panel:SetHeight(h)
   list:SetHeight(listH)
   win:SetHeight(52 + h + 46)
