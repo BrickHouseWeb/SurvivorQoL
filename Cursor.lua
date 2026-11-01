@@ -182,12 +182,19 @@ local function Tick()
   -- while Steer Mode (or any mouselook) has the mouse, the cursor is hidden and frozen in place,
   -- so a ring drawn there would just sit where you last clicked
   local looking = QOL.steering or (IsMouselooking and IsMouselooking())
-  if turning or looking or (db.onlyRun and not QOL.InRun()) then
+  -- Steer Mode can ask for the style to sit in the middle of the screen instead, as an aim mark
+  local centered = QOL.steering and QOL.SteerCenter and QOL.SteerCenter()
+  if turning or (looking and not centered) or (db.onlyRun and not QOL.InRun()) then
     HideAll(); HideTrail()
     trailX = nil
     return
   end
-  if db.shake then Shake(x, dt) end
+  if centered then
+    x, y = UIParent:GetWidth() / 2, UIParent:GetHeight() / 2
+    HideTrail()
+    trailX = nil
+  end
+  if db.shake and not centered then Shake(x, dt) end
   lastX = x
   local r, g, b = Color()
   local a = db.opacity
@@ -199,7 +206,7 @@ local function Tick()
   draw(x, y, S, r, g, b, a)
 
   -- trail: evenly spaced dots along the path since last frame, fading out
-  if db.trail ~= "off" then
+  if db.trail ~= "off" and not centered then
     local step = db.trail == "sparkles" and 9 or 5
     if trailX then
       local dx, dy = x - trailX, y - trailY
