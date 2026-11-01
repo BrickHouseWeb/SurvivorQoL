@@ -53,45 +53,16 @@ local function Index(list, name)
   end
 end
 
--- TargetByName reaches far past what is on screen, so when targeting by itself a hit is kept
--- only if it is near: CheckInteractDistance 4 is the follow range (about 28 yards).
-local function Close()
-  if type(CheckInteractDistance) ~= "function" then return false end
-  return CheckInteractDistance("target", 4) and true or false
-end
-
-local function AttackingMe()
-  return UnitExists("targettarget") and UnitIsUnit("targettarget", "player") and true or false
-end
-
--- Yards from the hero to a guardian's lair (AZS_LAIRS and the hero's AZS_RUN px/py share one
--- frame), or nil when unknown. Bosses have no position in the game's data.
-local function LairDist(name)
-  local run, lairs = AZS_RUN, AZS_LAIRS
-  local hx = type(run) == "table" and tonumber(run.px)
-  local hy = type(run) == "table" and tonumber(run.py)
-  if not hx or not hy or type(lairs) ~= "table" then return nil end
-  for i = 1, table.getn(lairs) do
-    local l = lairs[i]
-    if type(l) == "table" and l.name == name then
-      local lx, ly = tonumber(l.x), tonumber(l.y)
-      if lx and ly then return math.sqrt((lx - hx) * (lx - hx) + (ly - hy) * (ly - hy)) end
-    end
-  end
-end
-
--- "Near" is decided without touching your target: a boss or guardian is near when its nameplate
--- is on screen, or (guardians) when you are within reach of its lair. Then it is targeted once.
+-- Only what you could target anyway: a boss or guardian counts as near only while its nameplate
+-- is on screen. That is decided without touching your target; then it is targeted once.
 -- (Trying names one by one with TargetByName and switching back made the target flicker, and
--- TargetLastTarget only goes back one step.)
+-- TargetByName itself reaches far past the screen.)
 
--- names of enemies whose nameplate is on screen; nil when no enemy plate is shown at all
--- (nameplates turned off), so "near" can't be read from plates
+-- names of enemies whose nameplate is on screen
 local function PlateNames()
-  local names, any = {}, false
+  local names = {}
   for plate in pairs(QOL.PlateList()) do
     if plate:IsShown() and not QOL.PlateIsFriendly(plate) then
-      any = true
       local regions = { plate:GetRegions() }
       for i = 1, table.getn(regions) do
         local r = regions[i]
@@ -102,26 +73,22 @@ local function PlateNames()
       end
     end
   end
-  return any and names or nil
+  return names
 end
 
--- the bosses and guardians near you, most important first. useLair: guardians also count within
--- reach of their lair (auto-target only; Tab never reaches past what you could normally target)
-local function Near(list, useLair)
+-- the bosses and guardians with a nameplate on screen, most important first
+local function Near(list)
   local plates, near = PlateNames(), {}
   for i = 1, table.getn(list) do
-    local name = list[i].name
-    local d = LairDist(name)
-    if (plates and plates[name]) or (useLair and d and d <= db.reach) then table.insert(near, list[i]) end
+    if plates[list[i].name] then table.insert(near, list[i]) end
   end
-  return near, plates
+  return near
 end
 
--- targets one name once; keeps it only if it worked (and, with check, if it is close or
--- attacking you), otherwise goes back to what you had
-local function Pick(name, check)
+-- targets one name once; if it didn't take, goes back to what you had
+local function Pick(name)
   local before = UnitExists("target") and UnitName("target")
-  if TryTarget(name) and (not check or Close() or AttackingMe()) then return true end
+  if TryTarget(name) then return true end
   local now = UnitExists("target") and UnitName("target")
   if now ~= before then
     if before and TargetLastTarget then TargetLastTarget()
@@ -130,16 +97,13 @@ local function Pick(name, check)
   return false
 end
 
--- the best thing to target right now: the first near one, or with nameplates off, the most
--- important one if it turns out to be close
-local function Best(list, after, useLair)
-  local near, plates = Near(list, useLair)
+-- the near one to target next: the first, or the one after `after`
+local function Best(list, after)
+  local near = Near(list)
   local n = table.getn(near)
-  if n > 0 then
-    local i = Index(near, after)
-    return near[i and math.mod(i, n) + 1 or 1].name, false
-  end
-  if not plates and list[1] then return list[1].name, true end
+  if n == 0 then return nil end
+  local i = Index(near, after)
+  return near[i and math.mod(i, n) + 1 or 1].name
 end
 
 -- the Tab key: the next near boss or guardian after the one you have, else the normal Tab
@@ -148,10 +112,10 @@ local function Tab()
     local list = Targets()
     if table.getn(list) > 0 then
       local current = UnitExists("target") and not UnitIsDead("target") and UnitName("target")
-      local name, check = Best(list, current)
+      local name = Best(list, current)
       -- already on the only one near: stay on it
       if name and name == current then return end
-      if name and Pick(name, check) then return end
+      if name and Pick(name) then return end
     end
   end
   if nativeTab then nativeTab() end
@@ -174,9 +138,9 @@ local function Tick()
   local has = UnitExists("target") and not UnitIsDead("target")
   if has and Index(list, UnitName("target")) then return end
   if db.auto == "notarget" and has then return end
-  local name, check = Best(list, nil, true)
+  local name = Best(list, nil)
   -- nothing near, or it didn't stick: wait a bit before looking again
-  if not name or not Pick(name, check) then nextTry = GetTime() + 1 end
+  if not name or not Pick(name) then nextTry = GetTime() + 1 end
 end
 
 QOL.Register({
@@ -185,7 +149,7 @@ QOL.Register({
   glyph = "g_skull",
   desc = "Tab grabs the boss or guardian near you instead of the nearest enemy. When none is near, Tab works as normal.",
   default = true,
-  defaults = { tab = true, guardians = true, elites = false, auto = "always", reach = 40 },
+  defaults = { tab = true, guardians = true, elites = false, auto = "always" },
   Enable = function(mdb)
     db = mdb
     driver:SetScript("OnUpdate", Tick)
@@ -198,8 +162,7 @@ QOL.Register({
     G:Done()
     G = P:Group("Target by itself")
     G:Radios(nil, "auto", { { "off", "Off" }, { "notarget", "When I have no target" }, { "always", "Always" } })
-    G:Sliders({ { "reach", function(v) return "Guardian reach: " .. v .. " yd" end, 10, 80, 5, "10 yd", "80 yd" } })
-    G:Note("A boss or guardian counts once its nameplate is on screen. Guardians also count once you are within reach of their lair, so you can tag them early.")
+    G:Note("Only bosses and guardians with a nameplate on screen are ever targeted, the same reach as normal targeting.")
     G:Done()
   end,
 })

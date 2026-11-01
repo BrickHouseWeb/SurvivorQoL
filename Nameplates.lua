@@ -9,7 +9,7 @@ local BORDER = "Interface\\Tooltips\\Nameplate-Border"
 local BAR = "Interface\\TargetingFrame\\UI-StatusBar"
 local WHITE = "Interface\\Buttons\\WHITE8X8"
 local FONT = STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF"
--- name color per tier
+-- border color per tier
 local TINT = { final = { 1, 0.5, 0 }, boss = { 1, 0.5, 0 }, guardian = { 0.78, 0.5, 1 }, elite = { 1, 0.82, 0 }, normal = { 1, 1, 1 } }
 
 local db
@@ -152,17 +152,21 @@ local function Paint(st, kind, isTarget, calm)
     own.edge:SetPoint("BOTTOMRIGHT", own, "BOTTOMRIGHT", e, -e)
     own.edgeSize = e
   end
-  if isTarget then own.edge:SetVertexColor(1, 0.82, 0, 1) else own.edge:SetVertexColor(0, 0, 0, 1) end
+  -- important enemies show their tier in the border color (bosses orange, guardians purple,
+  -- elites gold); names stay white so they read the same everywhere
+  local tint = TINT[kind]
+  if isTarget then own.edge:SetVertexColor(1, 0.82, 0, 1)
+  elseif kind ~= "normal" and tint then own.edge:SetVertexColor(tint[1], tint[2], tint[3], 1)
+  else own.edge:SetVertexColor(0, 0, 0, 1) end
   if isTarget and db.targetGlow then own.glow:Show() else own.glow:Hide() end
   local low, high = st.bar:GetMinMaxValues()
   own.health:SetMinMaxValues(low, high)
   own.health:SetValue(st.bar:GetValue())
   own.health:SetStatusBarColor(BarColor(st.bar:GetStatusBarColor()))
-  local t = TINT[kind] or TINT.normal
   local text = ""
   if db.showName and (db.calmNames or kind ~= "normal" or not calm or isTarget) then text = st.name:GetText() or "" end
   own.label:SetText(text)
-  own.label:SetTextColor(t[1], t[2], t[3])
+  own.label:SetTextColor(1, 1, 1)
   local pct = ""
   if db.showPercent and high and high > low then pct = math.floor((st.bar:GetValue() - low) / (high - low) * 100 + 0.5) .. "%" end
   own.pct:SetText((kind ~= "normal" or not calm or isTarget) and pct or "")
