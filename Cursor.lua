@@ -179,7 +179,10 @@ local function Tick()
   local cx, cy = GetCursorPosition()
   local x, y = cx / s, cy / s
   local turning = db.hideTurning and IsMouseButtonDown and IsMouseButtonDown("RightButton")
-  if turning or (db.onlyRun and not QOL.InRun()) then
+  -- while Steer Mode (or any mouselook) has the mouse, the cursor is hidden and frozen in place,
+  -- so a ring drawn there would just sit where you last clicked
+  local looking = QOL.steering or (IsMouselooking and IsMouselooking())
+  if turning or looking or (db.onlyRun and not QOL.InRun()) then
     HideAll(); HideTrail()
     trailX = nil
     return

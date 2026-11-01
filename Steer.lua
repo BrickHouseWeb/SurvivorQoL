@@ -31,12 +31,13 @@ end
 local function Start()
   if not Has("MouselookStart") then return end
   if holding and Looking() then return end
-  if pcall(MouselookStart) then holding = true end
+  if pcall(MouselookStart) then holding = true; QOL.steering = true end
 end
 
 local function Stop()
   if not holding then return end
   holding = false
+  QOL.steering = false
   if Has("MouselookStop") then pcall(MouselookStop) end
 end
 
