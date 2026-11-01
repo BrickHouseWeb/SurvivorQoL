@@ -152,33 +152,60 @@ end
 
 -- ---------------------------------------------------------------- middle of the screen
 -- Mouselook freezes the hidden cursor where steering started, and the cursor comes back there
--- when cards show up. Starting steering only once the cursor is in the middle keeps that spot
--- in the middle, next to the cards. While we wait for it, a faint ring marks the spot; while
--- steering, a small reticle sits there (the Cursor module draws its own style there instead).
-local CENTER_REACH = 50
+-- when cards show up. Starting steering only once the cursor is at the aim spot keeps it there,
+-- next to the cards. Like action-camera games, the spot is a small plus a little above the
+-- middle of the screen, in front of the hero. While we wait for the cursor, a faint ring
+-- marks the spot.
+local CENTER_REACH = 40
 local mark = CreateFrame("Frame", nil, UIParent)
 mark:SetFrameStrata("TOOLTIP")
-mark:SetAllPoints(UIParent)
+mark:SetWidth(64)
+mark:SetHeight(64)
 mark:EnableMouse(false)
-local aim = mark:CreateTexture(nil, "OVERLAY")
-aim:SetTexture(QOL.media .. "reticle")
-aim:SetBlendMode("ADD")
-aim:SetVertexColor(1, 0.82, 0, 0.9)
-aim:SetWidth(26)
-aim:SetHeight(26)
-aim:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+mark:Hide()
+
+-- the plus: four gold arms over slightly bigger black ones (an outline that reads on anything)
+local arms = {}
+local function Arm(layer, r, g, b)
+  local t = mark:CreateTexture(nil, layer)
+  t:SetTexture("Interface\\Buttons\\WHITE8X8")
+  t:SetVertexColor(r, g, b, 1)
+  table.insert(arms, t)
+  return t
+end
+local plus = { outline = {}, fill = {} }
+for i = 1, 4 do
+  plus.outline[i] = Arm("ARTWORK", 0, 0, 0)
+  plus.fill[i] = Arm("OVERLAY", 1, 0.82, 0)
+end
+local function DrawPlus(size)
+  local len, gap, w = math.floor(size * 0.38 + 0.5), math.max(2, math.floor(size * 0.12 + 0.5)), 2
+  -- arm i: left, right, up, down from the middle
+  local dirs = { { -1, 0 }, { 1, 0 }, { 0, 1 }, { 0, -1 } }
+  for i = 1, 4 do
+    local dx, dy = dirs[i][1], dirs[i][2]
+    local cx, cy = dx * (gap + len / 2), dy * (gap + len / 2)
+    local aw, ah = dx ~= 0 and len or w, dy ~= 0 and len or w
+    for _, t in ipairs({ plus.outline[i], plus.fill[i] }) do
+      local pad = t == plus.outline[i] and 1 or 0
+      t:ClearAllPoints()
+      t:SetPoint("CENTER", mark, "CENTER", cx, cy)
+      t:SetWidth(aw + pad * 2)
+      t:SetHeight(ah + pad * 2)
+    end
+  end
+end
+
 local spot = mark:CreateTexture(nil, "OVERLAY")
 spot:SetTexture(QOL.media .. "ring1")
 spot:SetBlendMode("ADD")
-spot:SetVertexColor(1, 0.82, 0, 0.45)
-spot:SetWidth(CENTER_REACH * 2)
-spot:SetHeight(CENTER_REACH * 2)
-spot:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
-aim:Hide()
+spot:SetVertexColor(1, 0.82, 0, 0.35)
+spot:SetWidth(CENTER_REACH * 1.5)
+spot:SetHeight(CENTER_REACH * 1.5)
+spot:SetPoint("CENTER", mark, "CENTER", 0, 0)
 spot:Hide()
 
--- the aim spot in UIParent units: the middle of the screen, nudged by the page's sliders
--- (for a character that the camera does not keep dead center)
+-- the aim spot in UIParent units: the middle of the screen, raised and nudged by the sliders
 function QOL.SteerSpot()
   local x, y = UIParent:GetWidth() / 2, UIParent:GetHeight() / 2
   if db then x, y = x + db.spotX, y + db.spotY end
@@ -188,14 +215,18 @@ end
 -- "on": steering, "wait": waiting for the cursor to reach the spot, "off": neither
 local function Mark(state)
   local cx, cy = QOL.SteerSpot()
-  if aim.x ~= cx or aim.y ~= cy then
-    aim:ClearAllPoints(); aim:SetPoint("CENTER", UIParent, "BOTTOMLEFT", cx, cy)
-    spot:ClearAllPoints(); spot:SetPoint("CENTER", UIParent, "BOTTOMLEFT", cx, cy)
-    aim.x, aim.y = cx, cy
+  if mark.x ~= cx or mark.y ~= cy then
+    mark:ClearAllPoints()
+    mark:SetPoint("CENTER", UIParent, "BOTTOMLEFT", cx, cy)
+    mark.x, mark.y = cx, cy
   end
-  local cursor = QOL.Module("cursor")
-  if state == "on" and db.centerMark and not (cursor and QOL.IsOn(cursor)) then aim:Show() else aim:Hide() end
+  if mark.size ~= db.aimSize then DrawPlus(db.aimSize); mark.size = db.aimSize end
+  local showPlus = state == "on" and db.centerMark
+  for i = 1, table.getn(arms) do
+    if showPlus then arms[i]:Show() else arms[i]:Hide() end
+  end
   if state == "wait" then spot:Show() else spot:Hide() end
+  if showPlus or state == "wait" then mark:Show() else mark:Hide() end
 end
 
 local function NearMiddle()
@@ -254,8 +285,6 @@ ev:SetScript("OnEvent", function()
   if event == "PLAYER_LEAVING_WORLD" then Stop() else pcall(UpdatePointer) end
 end)
 
-function QOL.SteerCenter() return db and db.centerMark end
-
 -- key binding (Bindings.xml): turn Steer mode on or off
 BINDING_HEADER_SURVIVORQOL = "Survivor QoL"
 BINDING_NAME_SURVIVORQOL_STEER = "Turn Steer mode on or off"
@@ -270,9 +299,14 @@ QOL.Register({
   glyph = "g_steer",
   desc = "Your hero turns with the mouse without holding right-click. It lets go when you pick cards, open a window, chat or hold Alt. You can set a key for it in Key Bindings.",
   default = false,
-  defaults = { pointer = false, altFree = true, resumeDelay = 0.3, resume = "center", centerMark = true, spotX = 0, spotY = 0 },
+  defaults = { pointer = false, altFree = true, resumeDelay = 0.3, resume = "center", centerMark = true, spotX = 0, spotY = 60, aimSize = 16 },
   Enable = function(mdb)
     db = mdb
+    -- the first aim spot sat dead center; move it up in front of the hero once
+    if not db.spotV then
+      if db.spotX == 0 and db.spotY == 0 then db.spotY = 60 end
+      db.spotV = 2
+    end
     freedAt = GetTime()
     driver:SetScript("OnUpdate", Tick)
   end,
@@ -280,8 +314,7 @@ QOL.Register({
     driver:SetScript("OnUpdate", nil)
     Stop()
     pointer:Hide()
-    aim:Hide()
-    spot:Hide()
+    mark:Hide()
   end,
   Apply = function() if not db.pointer then pointer:Hide() end end,
   Page = function(P)
@@ -293,11 +326,12 @@ QOL.Register({
     G = P:Group("Cursor")
     G:Checks({ { "Hold Alt to get the cursor back", "altFree" }, { "Pointer box", "pointer" } })
     G:Checks({ { "Aim mark while steering", "centerMark" } })
+    G:Sliders({ { "aimSize", function(v) return "Aim mark size: " .. v .. " px" end, 8, 40, 1, "Small", "Large" } })
     G:Sliders({
       { "spotX", function(v) return "Aim spot left / right: " .. v end, -400, 400, 5, "Left", "Right" },
       { "spotY", function(v) return "Aim spot down / up: " .. v end, -300, 300, 5, "Down", "Up" },
     })
-    G:Note("While steering, a mark sits at the aim spot (your cursor style if the Cursor module is on). Move the spot onto your character if the camera doesn't keep it in the middle. Hold Alt to get the normal cursor back.")
+    G:Note("While steering, a small plus sits a little above the middle of the screen, in front of your character, like in action-camera games. Your cursor ring hides while you steer. Hold Alt to get the normal cursor back.")
     G:Note("Steering hides the cursor. The pointer box shows what it is on: name, level and health. Move it with Move frames.")
     G:Done()
   end,
