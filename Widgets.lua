@@ -113,11 +113,11 @@ function UI.Page(parent, width, store, onChange)
     end
     -- a row of radio buttons: options = { { value, text }, ... }
     function G:Radios(label, key, options)
-      local y = self:Add(20, 8)
+      local y = self:Add(22, 8)
       local x = 12
       if label then
         local t = UI.Text(self.box, "GameFontHighlight")
-        t:SetPoint("TOPLEFT", self.box, "TOPLEFT", x, y - 3)
+        t:SetPoint("TOPLEFT", self.box, "TOPLEFT", x, y - 5)
         t:SetText(label)
         x = x + t:GetStringWidth() + 14
       end
@@ -130,7 +130,7 @@ function UI.Page(parent, width, store, onChange)
           P.set(key, this.value)
           for j = 1, table.getn(radios) do radios[j]:SetOn(radios[j].value == this.value) end
         end)
-        x = x + r:GetWidth() + 16
+        x = x + r:GetWidth() + 4
         table.insert(radios, r)
       end
       table.insert(P.refresh, function()
@@ -298,32 +298,32 @@ function UI.Check(parent, label, x, y)
   return cb
 end
 
--- a radio button drawn from the stock UI-RadioButton texture (off, on, highlight)
+-- one choice of several, drawn as a button: the picked one is filled gold with dark text,
+-- the others are dark with grey text, so the choice reads at a glance
 function UI.Radio(parent, label)
   local b = CreateFrame("Button", nil, parent)
-  b:SetHeight(18)
-  local off = b:CreateTexture(nil, "ARTWORK")
-  off:SetTexture("Interface\\Buttons\\UI-RadioButton")
-  off:SetTexCoord(0, 0.25, 0, 1)
-  off:SetWidth(16)
-  off:SetHeight(16)
-  off:SetPoint("LEFT", b, "LEFT", 0, 0)
-  local on = b:CreateTexture(nil, "OVERLAY")
-  on:SetTexture("Interface\\Buttons\\UI-RadioButton")
-  on:SetTexCoord(0.25, 0.5, 0, 1)
-  on:SetAllPoints(off)
+  b:SetHeight(22)
+  b:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
   local hl = b:CreateTexture(nil, "HIGHLIGHT")
-  hl:SetTexture("Interface\\Buttons\\UI-RadioButton")
-  hl:SetTexCoord(0.5, 0.75, 0, 1)
-  hl:SetAllPoints(off)
-  hl:SetBlendMode("ADD")
-  local t = UI.Text(b, "GameFontHighlight")
-  t:SetPoint("LEFT", off, "RIGHT", 4, 0)
+  hl:SetTexture("Interface\\Buttons\\WHITE8X8")
+  hl:SetVertexColor(1, 1, 1, 0.08)
+  hl:SetAllPoints(b)
+  local t = UI.Text(b, "GameFontHighlightSmall", "CENTER")
+  t:SetPoint("CENTER", b, "CENTER", 0, 0)
   t:SetText(label)
-  b:SetWidth(20 + t:GetStringWidth())
+  b:SetWidth(t:GetStringWidth() + 22)
   b.SetOn = function(self, v)
-    if v then on:Show(); t:SetTextColor(GOLD[1], GOLD[2], GOLD[3]) else on:Hide(); t:SetTextColor(1, 1, 1) end
+    if v then
+      self:SetBackdropColor(1, 0.82, 0, 0.95)
+      self:SetBackdropBorderColor(1, 0.9, 0.4, 1)
+      t:SetTextColor(0.1, 0.07, 0)
+    else
+      self:SetBackdropColor(0.12, 0.11, 0.1, 0.95)
+      self:SetBackdropBorderColor(0.37, 0.35, 0.32, 1)
+      t:SetTextColor(0.75, 0.75, 0.75)
+    end
   end
+  b:SetOn(false)
   return b
 end
 
