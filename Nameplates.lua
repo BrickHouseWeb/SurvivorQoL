@@ -85,6 +85,13 @@ local function Build(st)
   own.glow:SetVertexColor(1, 0.82, 0, 0.55)
   own.glow:SetPoint("TOPLEFT", own, "TOPLEFT", -18, 14)
   own.glow:SetPoint("BOTTOMRIGHT", own, "BOTTOMRIGHT", 18, -14)
+  -- your target: a gold frame a few pixels out around the whole plate, name included
+  own.frame = CreateFrame("Frame", nil, own)
+  own.frame:SetPoint("TOPLEFT", own, "TOPLEFT", -5, 18)
+  own.frame:SetPoint("BOTTOMRIGHT", own, "BOTTOMRIGHT", 5, -5)
+  own.frame:SetBackdrop({ edgeFile = WHITE, edgeSize = 2 })
+  own.frame:SetBackdropBorderColor(1, 0.82, 0, 1)
+  own.frame:Hide()
   own.edge = own:CreateTexture(nil, "BORDER")
   own.edge:SetTexture(WHITE)
   own.back = own:CreateTexture(nil, "ARTWORK")
@@ -127,7 +134,8 @@ local function Paint(st, kind, isTarget, calm)
   if not st.own then Build(st) end
   Blank(st)
   local own = st.own
-  local scale, alpha = 1, 1
+  -- everything but your target is a little see-through, so the target is the one solid plate
+  local scale, alpha = 1, db.otherAlpha
   if kind == "final" or kind == "boss" then scale = db.bossSize
   elseif kind == "guardian" then scale = db.guardianSize
   elseif kind == "elite" then scale = db.eliteSize
@@ -135,6 +143,12 @@ local function Paint(st, kind, isTarget, calm)
   if isTarget then scale, alpha = math.max(scale, 1) * db.targetBoost, 1 end
   if own.scale ~= scale then own:SetScale(scale); own.scale = scale end
   if own.alpha ~= alpha then own:SetAlpha(alpha); own.alpha = alpha end
+  -- the target draws over the plates around it and gets its gold frame
+  if own.isTarget ~= isTarget then
+    own:SetFrameLevel(st.plate:GetFrameLevel() + (isTarget and 30 or 1))
+    if isTarget then own.frame:Show() else own.frame:Hide() end
+    own.isTarget = isTarget
+  end
   local w, h = math.floor(db.width * db.plateScale + 0.5), math.max(3, math.floor(db.height * db.plateScale + 0.5))
   if own.w ~= w or own.h ~= h then
     own:SetWidth(w); own:SetHeight(h); own.w, own.h = w, h
@@ -206,7 +220,7 @@ QOL.Register({
   default = true,
   defaults = { width = 110, height = 9, fontSize = 10, showName = true, showPercent = true,
     bossSize = 1.4, guardianSize = 1.25, eliteSize = 1.05, targetBoost = 1.15, targetGlow = true,
-    calm = true, threshold = 12, trashSize = 0.6, trashAlpha = 0.45, calmNames = true, plateScale = 1 },
+    calm = true, threshold = 12, trashSize = 0.6, trashAlpha = 0.45, calmNames = true, plateScale = 1, otherAlpha = 0.8 },
   Enable = function(mdb) db = mdb; driver:SetScript("OnUpdate", Tick) end,
   Disable = function()
     driver:SetScript("OnUpdate", nil)
@@ -219,6 +233,8 @@ QOL.Register({
       { "fontSize", function(v) return "Text size: " .. v end, 7, 16, 1, "Small", "Large" },
     })
     G:Checks({ { "Show health percent", "showPercent" }, { "Glow around my target", "targetGlow" } })
+    G:Sliders({ { "otherAlpha", function(v) return "Plates other than my target: " .. math.floor(v * 100 + 0.5) .. "%" end, 0.3, 1, 0.05, "Faint", "Solid" } })
+    G:Note("Your target is always solid, on top, and framed in gold.")
     G:Done()
     G = P:Group("Busy fights")
     G:Checks({ { "Shrink ordinary enemies when it gets busy", "calm" } })
