@@ -270,7 +270,7 @@ QOL.Register({
   glyph = "g_steer",
   desc = "Your hero turns with the mouse without holding right-click. It lets go when you pick cards, open a window, chat or hold Alt. You can set a key for it in Key Bindings.",
   default = false,
-  defaults = { pointer = true, altFree = true, resumeDelay = 0.3, resume = "center", centerMark = true, spotX = 0, spotY = 0 },
+  defaults = { pointer = false, altFree = true, resumeDelay = 0.3, resume = "center", centerMark = true, spotX = 0, spotY = 0 },
   Enable = function(mdb)
     db = mdb
     freedAt = GetTime()
@@ -280,6 +280,8 @@ QOL.Register({
     driver:SetScript("OnUpdate", nil)
     Stop()
     pointer:Hide()
+    aim:Hide()
+    spot:Hide()
   end,
   Apply = function() if not db.pointer then pointer:Hide() end end,
   Page = function(P)
