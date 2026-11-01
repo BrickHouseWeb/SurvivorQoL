@@ -172,6 +172,7 @@ end
 
 -- ---------------------------------------------------------------- frame loop
 local trailX, trailY = nil, nil
+local wasLooking, settleUntil = false, 0
 local function Tick()
   local dt = arg1 or 0
   spin = spin + dt
@@ -182,6 +183,11 @@ local function Tick()
   -- while Steer Mode (or any mouselook) has the mouse, the cursor is hidden and frozen in place,
   -- so a ring drawn there would just sit where you last clicked
   local looking = QOL.steering or (IsMouselooking and IsMouselooking())
+  -- right when steering starts or stops, the cursor position is still the old frozen one for a
+  -- frame or two: stay hidden briefly so the ring doesn't flash there
+  looking = looking and true or false
+  if looking ~= wasLooking then wasLooking, settleUntil = looking, GetTime() + 0.2 end
+  if GetTime() < settleUntil then looking = true end
   if turning or looking or (db.onlyRun and not QOL.InRun()) then
     HideAll(); HideTrail()
     trailX = nil
