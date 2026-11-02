@@ -2,7 +2,7 @@
 ## Title: |cffe8dfc8Survivor|r|cffffd100QoL|r
 ## Notes: Azeroth Survivors: quality-of-life modules you turn on and off with /qol or the minimap button. Nameplates, combat text, stats panel, cursor, steer mode and boss targeting.
 ## Author: Brick House Web Design
-## Version: 0.3.0
+## Version: 0.4.0
 ## SavedVariables: SurvivorQoLDB
 Core.lua
 Widgets.lua
