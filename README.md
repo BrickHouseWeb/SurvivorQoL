@@ -6,6 +6,8 @@ Open the settings with **/qol** or the gear button on the minimap.
 
 ## Modules
 
+- **Nameplates**: ordinary enemies get a tiny health bar. Bosses, guardians and your target get a full nameplate, and your target shows its debuffs.
+- **Combat Text**: your damage as a short list in one spot, newest on top, with spell icons you can turn off. Hits from one spell merge into one line, so it never runs down the screen.
 - **Stats Panel**: your main stats during a run. When a pick changes a stat, the difference shows for a few seconds.
 - **Cursor**: six styles to find your mouse on a crowded screen (Halo, Reticle, Crosshair, Spotlight, Sonar, Laser lines), plus a trail.
 - **Steer Mode**: your hero turns with the mouse without holding right-click. Lets go for cards, windows, chat and Alt. Right-clicking does not turn it off, and nameplates never block turning (hold Shift to click one).

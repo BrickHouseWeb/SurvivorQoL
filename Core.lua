@@ -94,9 +94,8 @@ boot:SetScript("OnEvent", function()
     db.on.cursor = (db.on.ring or db.on.trail) and true or false
   end
   db.on.ring, db.on.trail, db.ring, db.trail = nil, nil, nil, nil
-  -- 0.3 dropped the Nameplates module (ASTinyPlates does that) and folded Plate Pass-Through
-  -- into Steer Mode
-  db.on.nameplates, db.nameplates, db.on.plates, db.plates = nil, nil, nil, nil
+  -- 0.3 folded Plate Pass-Through into Steer Mode
+  db.on.plates, db.plates = nil, nil
   -- 0.3.1 dropped Damage Meter: the game draws its meter window itself, out of addons' reach
   -- (the game's own Options > HUD Scale sizes it)
   db.on.meter, db.meter = nil, nil

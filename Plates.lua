@@ -2,6 +2,7 @@
 -- WorldFrame, so a right-click that lands on one never starts turning. Empty each plate's mouse
 -- area (same trick SurvivorsDragonUi uses for hidden plates) so clicks reach the world. Holding
 -- Shift gives plates their clicks back, to target one. Works with any nameplate addon.
+-- It also finds the plates for the Nameplates module.
 
 local BORDER = "Interface\\Tooltips\\Nameplate-Border"
 local EMPTY = 1000000
@@ -59,6 +60,25 @@ local function Discover()
     if not plates[f] and IsPlate(f) then plates[f] = true end
   end
   seenChildren = count
+end
+
+-- shared with Nameplates: the native plates found so far (plate -> true)
+function QOL.PlateList()
+  if WorldFrame then Discover() end
+  return plates
+end
+
+-- green or blue health bar: a friendly plate (Shift-V)
+function QOL.PlateIsFriendly(plate)
+  local children = { plate:GetChildren() }
+  for i = 1, table.getn(children) do
+    local c = children[i]
+    if c.GetObjectType and c:GetObjectType() == "StatusBar" then
+      local r, g, b = c:GetStatusBarColor()
+      return (g > r + 0.1 and g > b + 0.1) or (b > r + 0.1 and b > g + 0.1)
+    end
+  end
+  return false
 end
 
 local function Tick()
