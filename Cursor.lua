@@ -78,6 +78,20 @@ local function Color()
   return db.color[1], db.color[2], db.color[3]
 end
 
+-- the cursor's color for other modules (Steer's aim point), read from the saved settings so it
+-- works even while the Cursor module is off
+function QOL.CursorColor()
+  local cdb = QOL.db and QOL.db.cursor
+  if not cdb then return 1, 0.82, 0 end
+  if cdb.classColor and RAID_CLASS_COLORS then
+    local _, class = UnitClass("player")
+    local c = class and RAID_CLASS_COLORS[class]
+    if c then return c.r, c.g, c.b end
+  end
+  if type(cdb.color) == "table" then return cdb.color[1], cdb.color[2], cdb.color[3] end
+  return 1, 0.82, 0
+end
+
 -- ---------------------------------------------------------------- styles
 local spin = 0
 local DRAW = {}
@@ -173,6 +187,16 @@ end
 -- ---------------------------------------------------------------- frame loop
 local trailX, trailY = nil, nil
 local wasLooking, settleUntil = false, 0
+
+-- The cursor layer sits above everything, so over a menu (the Escape menu, options, popups) it
+-- would draw on top of it. Those all use the DIALOG strata or higher; the Escape menu from
+-- SurvivorsDragonUi has no name, so the strata is what is checked.
+local MENU_STRATA = { DIALOG = true, FULLSCREEN = true, FULLSCREEN_DIALOG = true }
+local function OverMenu()
+  local f = GetMouseFocus and GetMouseFocus()
+  return f and f.GetFrameStrata and MENU_STRATA[f:GetFrameStrata()] or false
+end
+
 local function Tick()
   local dt = arg1 or 0
   spin = spin + dt
@@ -183,12 +207,13 @@ local function Tick()
   -- while Steer Mode (or any mouselook) has the mouse, the cursor is hidden and frozen in place,
   -- so a ring drawn there would just sit where you last clicked
   local looking = QOL.steering or (IsMouselooking and IsMouselooking())
+  if looking == 0 then looking = false end
   -- right when steering starts or stops, the cursor position is still the old frozen one for a
   -- frame or two: stay hidden briefly so the ring doesn't flash there
   looking = looking and true or false
   if looking ~= wasLooking then wasLooking, settleUntil = looking, GetTime() + 0.2 end
   if GetTime() < settleUntil then looking = true end
-  if turning or looking or (db.onlyRun and not QOL.InRun()) then
+  if turning or looking or OverMenu() or (db.onlyRun and not QOL.InRun()) then
     HideAll(); HideTrail()
     trailX = nil
     return

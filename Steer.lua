@@ -1,17 +1,20 @@
 -- Steer mode (was the SteerLook addon): keeps mouselook on (MouselookStart) so moving the mouse
 -- turns the hero the way holding right-click does. It lets go whenever the cursor is needed:
 -- card choices, pause, death, victory, the chat box, any open window and while you hold Alt.
--- After the cursor was needed it waits a moment, and optionally for the mouse to move, before
--- taking hold again, so clicking a card doesn't snap the view straight away.
+-- Once the cursor is free to go it takes hold again as soon as no mouse button is held, after a
+-- short pause, so the click that picked a card never lands in the world and chained cards don't
+-- flick steering on and off. Steering freezes the hidden cursor where it starts, so after a card
+-- pick the cursor comes back on the cards next time. A right-click (or any other key that ends
+-- mouselook in the engine) does not turn steering off: it is taken back next frame.
+-- The only settings are the aim point's on/off and size: the values below are tested defaults.
 -- TurnOrActionStart is protected on this client (Blizzard UI only), so never call it.
--- The pointer box shows what the hidden cursor is on, since mouselook hides the real cursor.
+
+local SPOT_Y = 40        -- aim point: UI units above the middle of the 3D view
+local RESUME = 0.15      -- seconds after the cursor stops being needed before steering again
 
 local db
 local holding = false   -- true while we have called MouselookStart and not Stop
 local freedAt           -- GetTime() when the cursor was last needed
-local freedFor          -- why: "alt", "cards" or "window" (only cards park the cursor first)
-local freeX, freeY      -- cursor position when the cursor stopped being needed
-local elapsed = 0
 local driver = CreateFrame("Frame")
 
 local function Has(name) return type(getglobal(name)) == "function" end
@@ -23,10 +26,11 @@ local function Phase()
 end
 
 -- Right-click and other keys can end mouselook on their own; IsMouselooking tells us when.
+-- It can answer 0 for "no", which Lua counts as true.
 local function Looking()
   if not Has("IsMouselooking") then return holding end
   local ok, on = pcall(IsMouselooking)
-  return ok and on and true or false
+  return ok and on and on ~= 0 or false
 end
 
 local function Start()
@@ -35,7 +39,7 @@ local function Start()
   if pcall(MouselookStart) then
     holding = true
     QOL.steering = true
-    if db.noTooltips and GameTooltip:IsShown() then GameTooltip:Hide() end
+    if GameTooltip:IsShown() then GameTooltip:Hide() end
   end
 end
 
@@ -43,7 +47,7 @@ end
 local tipOnShow = GameTooltip:GetScript("OnShow")
 GameTooltip:SetScript("OnShow", function()
   if tipOnShow then tipOnShow() end
-  if QOL.steering and db and db.noTooltips then this:Hide() end
+  if QOL.steering then this:Hide() end
 end)
 
 local function Stop()
@@ -79,218 +83,73 @@ end
 
 -- why the cursor is needed right now: "alt", "cards" (any phase but playing), "window", or nil
 local function CursorNeeded()
-  if db.altFree and IsAltKeyDown and IsAltKeyDown() then return "alt" end
+  if IsAltKeyDown and IsAltKeyDown() then return "alt" end
   if Phase() ~= "playing" then return "cards" end
   if OpenWindow() then return "window" end
 end
 
--- ---------------------------------------------------------------- pointer box
--- cursor icon, portrait, level, name and health of the unit under the hidden cursor
-local pointer = CreateFrame("Frame", "SurvivorQoLSteerPointer", UIParent)
-pointer:SetWidth(190)
-pointer:SetHeight(46)
-pointer:SetFrameStrata("MEDIUM")
-pointer:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-  tile = true, tileSize = 16, edgeSize = 12, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
-pointer:SetBackdropColor(0, 0, 0, 0.75)
-pointer:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
-pointer:Hide()
-pointer.cursor = pointer:CreateTexture(nil, "OVERLAY")
-pointer.cursor:SetTexture("Interface\\Cursor\\Point")
-pointer.cursor:SetWidth(22)
-pointer.cursor:SetHeight(22)
-pointer.cursor:SetPoint("LEFT", pointer, "LEFT", 6, 0)
-pointer.portrait = pointer:CreateTexture(nil, "ARTWORK")
-pointer.portrait:SetWidth(32)
-pointer.portrait:SetHeight(32)
-pointer.portrait:SetPoint("LEFT", pointer.cursor, "RIGHT", 2, 0)
-pointer.name = pointer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-pointer.name:SetPoint("TOPLEFT", pointer.portrait, "TOPRIGHT", 6, -2)
-pointer.name:SetPoint("RIGHT", pointer, "RIGHT", -8, 0)
-pointer.name:SetJustifyH("LEFT")
-pointer.bar = CreateFrame("StatusBar", nil, pointer)
-pointer.bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
-pointer.bar:SetHeight(10)
-pointer.bar:SetPoint("BOTTOMLEFT", pointer.portrait, "BOTTOMRIGHT", 6, 2)
-pointer.bar:SetPoint("RIGHT", pointer, "RIGHT", -8, 0)
-pointer.bar:SetMinMaxValues(0, 1)
-pointer.hp = pointer.bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-pointer.hp:SetPoint("CENTER", pointer.bar, "CENTER", 0, 0)
-QOL.Movable(pointer, "steerPointer", "Steer Pointer", { "LEFT", "LEFT", 20, 0 }, "steer")
-
-local function LevelText(unit)
-  local level = UnitLevel(unit)
-  local text = (level and level > 0) and tostring(level) or "??"
-  local class = UnitClassification and UnitClassification(unit)
-  if class == "worldboss" then return "Boss" end
-  if class == "elite" or class == "rareelite" then return text .. "+" end
-  return text
-end
-
-local function UpdatePointer()
-  if QOL.moving then pointer:Show() return end
-  if not db.pointer or Phase() ~= "playing" then pointer:Hide() return end
-  pointer:Show()
-  if not UnitExists("mouseover") then
-    pointer.unitName = nil
-    pointer.portrait:SetTexture(nil)
-    pointer.name:SetText("Nothing")
-    pointer.name:SetTextColor(0.6, 0.6, 0.6)
-    pointer.bar:Hide()
-    pointer:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
-    return
-  end
-  local name = UnitName("mouseover") or "?"
-  if pointer.unitName ~= name then
-    pointer.unitName = name
-    pcall(SetPortraitTexture, pointer.portrait, "mouseover")
-  end
-  pointer.name:SetText(LevelText("mouseover") .. "  " .. name)
-  local r, g, b = 1, 0.82, 0
-  if UnitCanAttack("player", "mouseover") then r, g, b = 1, 0.25, 0.2
-  elseif UnitIsFriend("player", "mouseover") then r, g, b = 0.3, 1, 0.3 end
-  pointer.name:SetTextColor(r, g, b)
-  pointer:SetBackdropBorderColor(r, g, b, 1)
-  local hp, maxHp = UnitHealth("mouseover") or 0, UnitHealthMax("mouseover") or 0
-  if maxHp > 0 then
-    pointer.bar:SetMinMaxValues(0, maxHp)
-    pointer.bar:SetValue(hp)
-    pointer.bar:SetStatusBarColor(r, g, b)
-    pointer.hp:SetText(math.floor(hp / maxHp * 100 + 0.5) .. "%")
-    pointer.bar:Show()
-  else
-    pointer.bar:Hide()
-  end
-end
-
--- ---------------------------------------------------------------- middle of the screen
--- Mouselook freezes the hidden cursor where steering started, and the cursor comes back there
--- when cards show up. Starting steering only once the cursor is at the aim spot keeps it there,
--- next to the cards. Like action-camera games, the spot is a small plus a little above the
--- middle of the screen, in front of the hero. While we wait for the cursor, a faint ring
--- marks the spot.
-local CENTER_REACH = 70
-local WAIT_MAX = 2   -- seconds: after this, steer again even if the cursor never reached the spot
+-- ---------------------------------------------------------------- aim mark
+-- A quiet aim point a little above the middle of the game's 3D view (WorldFrame), in front of
+-- the hero: a small soft dot inside a faint thin ring, in the Cursor module's color (class color
+-- by default) so it matches the cursor trail, without looking like a shooter's crosshair. WorldFrame and not UIParent: the camera keeps the hero in the middle
+-- of WorldFrame, and on some setups UIParent does not cover the same area. LOW strata keeps it
+-- under every window and menu.
 local mark = CreateFrame("Frame", nil, UIParent)
-mark:SetFrameStrata("TOOLTIP")
-mark:SetWidth(64)
-mark:SetHeight(64)
+mark:SetFrameStrata("LOW")
 mark:EnableMouse(false)
+mark:SetPoint("CENTER", WorldFrame, "CENTER", 0, SPOT_Y)
 mark:Hide()
 
--- the plus: four gold arms over slightly bigger black ones (an outline that reads on anything)
-local arms = {}
-local function Arm(layer, r, g, b)
-  local t = mark:CreateTexture(nil, layer)
-  t:SetTexture("Interface\\Buttons\\WHITE8X8")
-  t:SetVertexColor(r, g, b, 1)
-  table.insert(arms, t)
-  return t
-end
-local plus = { outline = {}, fill = {} }
-for i = 1, 4 do
-  plus.outline[i] = Arm("ARTWORK", 0, 0, 0)
-  plus.fill[i] = Arm("OVERLAY", 1, 0.82, 0)
-end
-local function DrawPlus(size, w)
-  local len, gap = math.floor(size * 0.38 + 0.5), math.max(2, math.floor(size * 0.12 + 0.5))
-  -- arm i: left, right, up, down from the middle
-  local dirs = { { -1, 0 }, { 1, 0 }, { 0, 1 }, { 0, -1 } }
-  for i = 1, 4 do
-    local dx, dy = dirs[i][1], dirs[i][2]
-    local cx, cy = dx * (gap + len / 2), dy * (gap + len / 2)
-    local aw, ah = dx ~= 0 and len or w, dy ~= 0 and len or w
-    for _, t in ipairs({ plus.outline[i], plus.fill[i] }) do
-      local pad = t == plus.outline[i] and 1 or 0
-      t:ClearAllPoints()
-      t:SetPoint("CENTER", mark, "CENTER", cx, cy)
-      t:SetWidth(aw + pad * 2)
-      t:SetHeight(ah + pad * 2)
-    end
+local ring = mark:CreateTexture(nil, "ARTWORK")
+ring:SetTexture(QOL.media .. "ring2")
+ring:SetAllPoints(mark)
+local dot = mark:CreateTexture(nil, "OVERLAY")
+dot:SetTexture(QOL.media .. "dot")
+dot:SetPoint("CENTER", mark, "CENTER", 0, 0)
+
+local function Mark(on)
+  if not (on and db.centerMark) then mark:Hide() return end
+  if mark.size ~= db.aimSize then
+    mark:SetWidth(db.aimSize)
+    mark:SetHeight(db.aimSize)
+    local d = math.max(3, math.floor(db.aimSize / 4 + 0.5))
+    dot:SetWidth(d)
+    dot:SetHeight(d)
+    mark.size = db.aimSize
   end
+  local r, g, b = QOL.CursorColor()
+  ring:SetVertexColor(r, g, b, 0.45)
+  dot:SetVertexColor(r, g, b, 0.9)
+  mark:Show()
 end
 
-local spot = mark:CreateTexture(nil, "OVERLAY")
-spot:SetTexture(QOL.media .. "ring2")
-spot:SetBlendMode("ADD")
-spot:SetVertexColor(1, 0.82, 0, 0.75)
-spot:SetWidth(CENTER_REACH)
-spot:SetHeight(CENTER_REACH)
-spot:SetPoint("CENTER", mark, "CENTER", 0, 0)
-spot:Hide()
-
--- The aim spot is measured from WorldFrame, the game's 3D view, not UIParent: the camera keeps
--- the hero in the middle of WorldFrame, and on some setups UIParent does not cover the same area.
--- It sits a little above that middle, nudged by the sliders (in UI units).
-local function SpotPixels()
-  local wx, wy = WorldFrame:GetCenter()
-  local ws, us = WorldFrame:GetEffectiveScale(), UIParent:GetEffectiveScale()
-  return wx * ws + db.spotX * us, wy * ws + db.spotY * us
-end
-
--- "on": steering, "wait": waiting for the cursor to reach the spot, "off": neither
-local function Mark(state)
-  if mark.x ~= db.spotX or mark.y ~= db.spotY then
-    mark:ClearAllPoints()
-    mark:SetPoint("CENTER", WorldFrame, "CENTER", db.spotX, db.spotY)
-    mark.x, mark.y = db.spotX, db.spotY
-  end
-  if mark.size ~= db.aimSize or mark.thick ~= db.aimThick then
-    DrawPlus(db.aimSize, db.aimThick)
-    mark.size, mark.thick = db.aimSize, db.aimThick
-  end
-  local showPlus = state == "on" and db.centerMark
-  for i = 1, table.getn(arms) do
-    if showPlus then arms[i]:Show() else arms[i]:Hide() end
-  end
-  if state == "wait" then spot:Show() else spot:Hide() end
-  if showPlus or state == "wait" then mark:Show() else mark:Hide() end
-end
-
-local function NearMiddle()
-  local x, y = GetCursorPosition()
-  local cx, cy = SpotPixels()
-  local reach = CENTER_REACH * UIParent:GetEffectiveScale()
-  return (x - cx) * (x - cx) + (y - cy) * (y - cy) <= reach * reach
+local function ButtonHeld()
+  if not IsMouseButtonDown then return false end
+  return IsMouseButtonDown("LeftButton") or IsMouseButtonDown("RightButton") or IsMouseButtonDown("MiddleButton")
 end
 
 -- ---------------------------------------------------------------- frame loop
--- Checked every frame, so steering lets go the moment cards or a window come up.
+-- Checked every frame, so steering lets go the moment cards or a window come up, and takes the
+-- mouse back the frame after a right-click let go of it.
 local function Step()
-  local why = CursorNeeded()
-  if why then
+  if CursorNeeded() then
     Stop()
-    Mark("off")
-    freedAt, freedFor, freeX = GetTime(), why, nil
+    Mark(false)
+    freedAt = GetTime()
     return
   end
-  if holding then return end
-  -- After Alt: steer again at once. After a window: after the short delay. After cards: after the
-  -- delay, then once the cursor is back at the aim spot (or has moved), at most 2 s later.
-  if freedAt and freedFor ~= "alt" then
-    if GetTime() - freedAt < db.resumeDelay then Mark("off") return end
-    if freedFor == "cards" and db.resume ~= "instant" then
-      if db.resume == "center" then
-        if not NearMiddle() and GetTime() - freedAt < db.resumeDelay + WAIT_MAX then Mark("wait") return end
-      elseif db.resume == "move" then
-        local x, y = GetCursorPosition()
-        if not freeX then freeX, freeY = x, y return end
-        if math.abs(x - freeX) + math.abs(y - freeY) < 12 then return end
-      end
-    end
+  if holding and Looking() then return end
+  -- coming back from cards or a window: wait for the click to finish and a short pause
+  if freedAt then
+    if ButtonHeld() or GetTime() - freedAt < RESUME then return end
+    freedAt = nil
   end
-  freedAt, freedFor = nil, nil
   Start()
-  Mark("on")
+  Mark(true)
 end
 
 local function Tick()
   local ok, err = pcall(Step)
-  elapsed = elapsed + (arg1 or 0)
-  if ok and elapsed >= 0.1 then
-    elapsed = 0
-    ok, err = pcall(UpdatePointer)
-  end
   if not ok then
     Stop()
     QOL.Set(QOL.Module("steer"), false)
@@ -299,11 +158,9 @@ local function Tick()
 end
 
 local ev = CreateFrame("Frame")
-ev:RegisterEvent("UPDATE_MOUSEOVER_UNIT")
 ev:RegisterEvent("PLAYER_LEAVING_WORLD")
 ev:SetScript("OnEvent", function()
-  if not db or not QOL.IsOn(QOL.Module("steer")) then return end
-  if event == "PLAYER_LEAVING_WORLD" then Stop() else pcall(UpdatePointer) end
+  if db and QOL.IsOn(QOL.Module("steer")) then Stop() end
 end)
 
 -- key binding (Bindings.xml): turn Steer mode on or off
@@ -318,55 +175,33 @@ QOL.Register({
   key = "steer",
   label = "Steer Mode",
   glyph = "g_steer",
-  desc = "Turn with the mouse without holding right-click. It lets go for cards, windows and chat. Set a key for it in Key Bindings.",
+  desc = "Turn with the mouse without holding right-click. It lets go for cards, windows and chat, and nameplates never block turning (hold Shift to click one). Set a key for it in Key Bindings.",
   default = false,
-  defaults = { pointer = false, altFree = true, resumeDelay = 0, resume = "instant", centerMark = true, spotX = 0, spotY = 40, aimSize = 16, aimThick = 1, noTooltips = true },
+  defaults = { centerMark = true, aimSize = 14 },
   Enable = function(mdb)
     db = mdb
-    -- the first aim spot sat dead center; move it up in front of the hero once
-    if not db.spotV then
-      if db.spotX == 0 and db.spotY == 0 then db.spotY = 60 end
-      db.spotV = 2
+    -- settings that became fixed defaults in 0.3
+    for _, k in ipairs({ "pointer", "resume", "resumeDelay", "spotV", "altFree", "noTooltips", "spotX", "spotY", "aimThick" }) do
+      db[k] = nil
     end
-    -- the hover info box used to be on by default; turn it off once
-    if db.spotV < 3 then db.pointer = false; db.spotV = 3 end
-    -- the default spot moved down from 60 to 40
-    if db.spotV < 4 then
-      if db.spotY == 60 then db.spotY = 40 end
-      db.spotV = 4
-    end
-    -- steering now comes back right away after cards
-    if db.spotV < 5 then
-      if db.resume == "center" then db.resume = "instant" end
-      db.resumeDelay = 0
-      db.spotV = 5
-    end
-    -- turning it on steers right away; only cards and windows make it wait
+    -- aimSize used to size the old plus (8-40, default 16); start the new ring at its default
+    if not db.aimV then db.aimSize, db.aimV = 14, 1 end
+    -- turning it on steers right away
     freedAt = nil
     driver:SetScript("OnUpdate", Tick)
+    QOL.PlatePassThrough(true)
   end,
   Disable = function()
     driver:SetScript("OnUpdate", nil)
     Stop()
-    pointer:Hide()
     mark:Hide()
+    QOL.PlatePassThrough(false)
   end,
-  Apply = function() if not db.pointer then pointer:Hide() end end,
   Page = function(P)
-    local G = P:Group("While steering")
-    G:Checks({ { "Hold Alt to get the cursor back", "altFree" }, { "No tooltips", "noTooltips" } })
-    G:Done()
-    G = P:Group("Aim mark")
-    G:Checks({ { "Show a plus in front of my character", "centerMark" } })
-    G:Sliders({
-      { "aimSize", function(v) return "Size: " .. v .. " px" end, 8, 40, 1, "Small", "Large" },
-      { "aimThick", function(v) return "Thickness: " .. v .. " px" end, 1, 4, 1, "Thin", "Thick" },
-    })
-    G:Sliders({ { "spotY", function(v) return "Height: " .. v end, -200, 200, 5, "Lower", "Higher" } })
-    G:Done()
-    G = P:Group("After cards")
-    G:Radios(nil, "resume", { { "instant", "Right away" }, { "center", "When the cursor is back at the plus" }, { "move", "When I move the mouse" } })
-    G:Note("When steering comes back after you pick a card.")
+    local G = P:Group("Steering")
+    G:Checks({ { "Show an aim point in front of my character", "centerMark" } })
+    G:Sliders({ { "aimSize", function(v) return "Aim point size: " .. v .. " px" end, 8, 30, 1, "Small", "Large" } })
+    G:Note("The aim point uses your cursor color (Cursor page). Hold Alt to get the cursor for a moment. Hold Shift to click a nameplate. Steering lets go for cards, windows and chat, and comes back once you have clicked.")
     G:Done()
   end,
 })

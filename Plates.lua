@@ -1,11 +1,11 @@
--- Nameplates: native nameplates are mouse-enabled frames on WorldFrame, so a right-click that
--- lands on one never starts turning. Empty each plate's mouse area (same trick
--- SurvivorsDragonUi uses for hidden plates) so clicks reach the world.
+-- Plate pass-through, part of Steer Mode: native nameplates are mouse-enabled frames on
+-- WorldFrame, so a right-click that lands on one never starts turning. Empty each plate's mouse
+-- area (same trick SurvivorsDragonUi uses for hidden plates) so clicks reach the world. Holding
+-- Shift gives plates their clicks back, to target one. Works with any nameplate addon.
 
 local BORDER = "Interface\\Tooltips\\Nameplate-Border"
 local EMPTY = 1000000
 
-local db
 local plates = {}
 local orig = {}   -- frame -> its insets before we emptied them, for giving clicks back
 local seenChildren = 0
@@ -19,19 +19,6 @@ local function IsPlate(frame)
     local r = regions[i]
     if r and r.GetObjectType and r:GetObjectType() == "Texture" and r:GetTexture() == BORDER then
       return true
-    end
-  end
-  return false
-end
-
--- green or blue health bar: a friendly plate (Shift-V)
-local function IsFriendly(plate)
-  local children = { plate:GetChildren() }
-  for i = 1, table.getn(children) do
-    local c = children[i]
-    if c.GetObjectType and c:GetObjectType() == "StatusBar" then
-      local r, g, b = c:GetStatusBarColor()
-      return (g > r + 0.1 and g > b + 0.1) or (b > r + 0.1 and b > g + 0.1)
     end
   end
   return false
@@ -74,45 +61,27 @@ local function Discover()
   seenChildren = count
 end
 
--- shared with Calm Crowds: the native plates found so far (plate -> true)
-function QOL.PlateList()
-  if WorldFrame then Discover() end
-  return plates
-end
-QOL.PlateIsFriendly = IsFriendly
-
 local function Tick()
   elapsedSince = elapsedSince + arg1
   if elapsedSince < 0.1 then return end
   elapsedSince = 0
   if not WorldFrame then return end
   Discover()
-  -- Holding Shift, or outside a run when "only during a run" is on: plates click as normal.
-  local pass = not (db.shift and IsShiftKeyDown()) and not (db.onlyRun and not QOL.InRun())
+  local pass = not IsShiftKeyDown()
   -- Re-apply every tick: another addon restoring its saved insets would undo ours.
   for plate in pairs(plates) do
     if plate:IsShown() then
-      if pass and (db.friendly or not IsFriendly(plate)) then Each(plate, Empty) else Each(plate, Restore) end
+      if pass then Each(plate, Empty) else Each(plate, Restore) end
     end
   end
 end
 
-QOL.Register({
-  key = "plates",
-  label = "Plate Pass-Through",
-  glyph = "g_plate",
-  desc = "Right-click turning works even with your mouse on a nameplate. Doesn't change how nameplates look, and works with any nameplate addon.",
-  default = true,
-  defaults = { shift = true, onlyRun = false, friendly = true },
-  Enable = function(mdb) db = mdb; driver:SetScript("OnUpdate", Tick) end,
-  Disable = function()
+-- Steer Mode turns this on and off with itself
+function QOL.PlatePassThrough(on)
+  if on then
+    driver:SetScript("OnUpdate", Tick)
+  else
     driver:SetScript("OnUpdate", nil)
     for frame in pairs(orig) do Restore(frame) end
-  end,
-  Page = function(P)
-    local G = P:Group("Clicking a nameplate")
-    G:Checks({ { "Hold Shift to click a nameplate", "shift" } })
-    G:Note("Hold Shift when you want to click a nameplate to target that enemy.")
-    G:Done()
-  end,
-})
+  end
+end

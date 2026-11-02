@@ -6,7 +6,7 @@ local UI = QOL.UI
 local W, LIST_W, PAD = 760, 206, 14
 local PANEL_W = W - PAD * 2 - LIST_W - 12
 local PAGE_W = PANEL_W - 54   -- room for the scrollbar on the right
-local VERSION = "v0.2"
+local VERSION = "v0.3"
 
 local win = CreateFrame("Frame", "SurvivorQoLOptions", UIParent)
 win:SetWidth(W)
@@ -24,10 +24,10 @@ win:Hide()
 table.insert(UISpecialFrames, "SurvivorQoLOptions")
 QOL.window = win
 
--- title bar: gear glyph, "Survivor QoL", version, close; a gold rule fading at both ends
+-- title bar: the addon icon, "Survivor QoL", version, close; a gold rule fading at both ends
 local mark = win:CreateTexture(nil, "ARTWORK")
-mark:SetTexture(QOL.media .. "g_gear")
-mark:SetVertexColor(1, 0.82, 0)
+mark:SetTexture(QOL.ICON)
+mark:SetTexCoord(0.07, 0.93, 0.07, 0.93)
 mark:SetWidth(18)
 mark:SetHeight(18)
 mark:SetPoint("TOPLEFT", win, "TOPLEFT", PAD + 2, -12)

@@ -298,8 +298,9 @@ function UI.Check(parent, label, x, y)
   return cb
 end
 
--- one choice of several, drawn as a button: the picked one is filled gold with dark text,
--- the others are dark with grey text, so the choice reads at a glance
+-- one choice of several, drawn as a button: the picked one has a deep gold fill, a bright gold
+-- edge and white text, the others are dark with grey text, so the choice reads at a glance.
+-- (Dark text on bright gold smeared: the game's font renderer draws a dark edge around text.)
 function UI.Radio(parent, label)
   local b = CreateFrame("Button", nil, parent)
   b:SetHeight(22)
@@ -314,16 +315,13 @@ function UI.Radio(parent, label)
   b:SetWidth(t:GetStringWidth() + 22)
   b.SetOn = function(self, v)
     if v then
-      self:SetBackdropColor(1, 0.82, 0, 0.95)
-      self:SetBackdropBorderColor(1, 0.9, 0.4, 1)
-      t:SetTextColor(0.1, 0.07, 0)
-      -- dark text on gold: the font's black drop shadow would smear it
-      t:SetShadowOffset(0, 0)
+      self:SetBackdropColor(0.45, 0.33, 0.04, 0.95)
+      self:SetBackdropBorderColor(1, 0.82, 0, 1)
+      t:SetTextColor(1, 1, 1)
     else
       self:SetBackdropColor(0.12, 0.11, 0.1, 0.95)
       self:SetBackdropBorderColor(0.37, 0.35, 0.32, 1)
       t:SetTextColor(0.75, 0.75, 0.75)
-      t:SetShadowOffset(1, -1)
     end
   end
   b:SetOn(false)

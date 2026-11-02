@@ -1,7 +1,7 @@
 -- Boss Targeting (was the BossTab addon): while a boss or guardian is alive (from the game's
 -- AZS_UNITS list), Tab targets it instead of the nearest enemy, final boss first, and steps
 -- through them on each press. Optionally it also targets one by itself once it is close enough
--- to target. When none is up or in range, Tab works as normal.
+-- to target. When none is up or in Tab's reach, Tab works as normal.
 
 local PHASES = { playing = true, choosing = true, paused = true, victory = true }
 local ORDER = { final = 1, boss = 2, guardian = 3, elite = 4 }
@@ -53,34 +53,61 @@ local function Index(list, name)
   end
 end
 
--- Only what you could target anyway: a boss or guardian counts as near only while its nameplate
--- is on screen. That is decided without touching your target; then it is targeted once.
--- (Trying names one by one with TargetByName and switching back made the target flicker, and
--- TargetByName itself reaches far past the screen.)
+-- Only what you could target anyway: a boss or guardian counts as near only when the game's own
+-- Tab can reach it. Tab is stepped through a number of times in one go (nothing is drawn in
+-- between, so you never see it), the bosses and guardians it lands on are noted, and your target
+-- is put back. (TargetByName alone reaches far past what Tab can, and nameplates only show
+-- within about 20 yards.)
+local SCAN = 12
 
--- names of enemies whose nameplate is on screen
-local function PlateNames()
-  local names = {}
-  for plate in pairs(QOL.PlateList()) do
-    if plate:IsShown() and not QOL.PlateIsFriendly(plate) then
-      local regions = { plate:GetRegions() }
-      for i = 1, table.getn(regions) do
-        local r = regions[i]
-        if r and r.GetObjectType and r:GetObjectType() == "FontString" then
-          local t = r:GetText()
-          if t and t ~= "" and not string.find(t, "^%d+$") then names[t] = true end
-        end
-      end
-    end
-  end
-  return names
+-- your target as it was (a dead one is let go, Tab never lands on it again)
+local function Snap()
+  if not UnitExists("target") or UnitIsDead("target") then return nil end
+  local max = UnitHealthMax("target") or 0
+  return { name = UnitName("target"), frac = max > 0 and (UnitHealth("target") or 0) / max or 0 }
 end
 
--- the bosses and guardians with a nameplate on screen, most important first
+local function Same(snap)
+  local max = UnitHealthMax("target") or 0
+  local frac = max > 0 and (UnitHealth("target") or 0) / max or 0
+  return UnitExists("target") and UnitName("target") == snap.name and math.abs(frac - snap.frac) < 0.01
+end
+
+-- back to the target you had before the scan
+local function Restore(snap)
+  if not snap then
+    if UnitExists("target") and ClearTarget then ClearTarget() end
+    return
+  end
+  for i = 1, SCAN do
+    if Same(snap) then return end
+    nativeTab()
+  end
+  if not Same(snap) then TryTarget(snap.name) end
+end
+
+-- names of the wanted units that Tab reaches right now
+local function Reach(list)
+  local seen = {}
+  if not nativeTab then return seen end
+  local wanted = {}
+  for i = 1, table.getn(list) do wanted[list[i].name] = true end
+  local snap = Snap()
+  for i = 1, SCAN do
+    nativeTab()
+    if not UnitExists("target") then break end
+    local n = UnitName("target")
+    if wanted[n] and not UnitIsDead("target") then seen[n] = true end
+  end
+  Restore(snap)
+  return seen
+end
+
+-- the bosses and guardians within Tab's reach, most important first
 local function Near(list)
-  local plates, near = PlateNames(), {}
+  local reach, near = Reach(list), {}
   for i = 1, table.getn(list) do
-    if plates[list[i].name] then table.insert(near, list[i]) end
+    if reach[list[i].name] then table.insert(near, list[i]) end
   end
   return near
 end
@@ -127,10 +154,11 @@ if type(TargetNearestEnemy) == "function" then
   TargetNearestEnemy = Tab
 end
 
+-- each look steps through Tab, so look once a second at most
 local nextTry = 0
 local function Tick()
   wait = wait + (arg1 or 0)
-  if wait < 0.4 then return end
+  if wait < 1 then return end
   wait = 0
   if db.auto == "off" or GetTime() < nextTry then return end
   local list = Targets()
@@ -140,7 +168,7 @@ local function Tick()
   if db.auto == "notarget" and has then return end
   local name = Best(list, nil)
   -- nothing near, or it didn't stick: wait a bit before looking again
-  if not name or not Pick(name) then nextTry = GetTime() + 1 end
+  if not name or not Pick(name) then nextTry = GetTime() + 2 end
 end
 
 QOL.Register({
@@ -162,7 +190,7 @@ QOL.Register({
     G:Done()
     G = P:Group("Target by itself")
     G:Radios(nil, "auto", { { "off", "Off" }, { "notarget", "When I have no target" }, { "always", "Always" } })
-    G:Note("Only bosses and guardians with a nameplate on screen are ever targeted, the same reach as normal targeting.")
+    G:Note("Only bosses and guardians that Tab could reach are ever targeted.")
     G:Done()
   end,
 })

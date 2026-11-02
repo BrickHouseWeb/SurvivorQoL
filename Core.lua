@@ -3,6 +3,8 @@
 -- character on the account. WoW 1.12 / Lua 5.0.
 
 QOL = { modules = {}, say = "|cffe8dfc8Survivor|r|cffffd100QoL|r: ", media = "Interface\\AddOns\\SurvivorQoL\\media\\" }
+-- the addon's icon (minimap button, settings title): the game's own Engineering icon
+QOL.ICON = "Interface\\Icons\\Trade_Engineering"
 
 -- m = { key, label, glyph, desc, default, defaults = {}, Enable(db), Disable(db), Apply(db), Page(page, db) }
 function QOL.Register(m)
@@ -92,6 +94,9 @@ boot:SetScript("OnEvent", function()
     db.on.cursor = (db.on.ring or db.on.trail) and true or false
   end
   db.on.ring, db.on.trail, db.ring, db.trail = nil, nil, nil, nil
+  -- 0.3 dropped the Nameplates module (ASTinyPlates does that) and folded Plate Pass-Through
+  -- into Steer Mode
+  db.on.nameplates, db.nameplates, db.on.plates, db.plates = nil, nil, nil, nil
   for i = 1, table.getn(QOL.modules) do
     local m = QOL.modules[i]
     if type(db[m.key]) ~= "table" then db[m.key] = {} end
