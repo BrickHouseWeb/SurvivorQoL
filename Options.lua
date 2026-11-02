@@ -252,7 +252,6 @@ SlashCmdList["SURVIVORQOL"] = function(msg)
   msg = string.lower(msg or "")
   if msg == "move" then QOL.MoveMode(true) return end
   if msg == "stats all" and QOL.StatsFields then QOL.StatsFields() return end
-  if msg == "meter" and QOL.MeterInfo then QOL.MeterInfo() return end
   -- /qol find <word>: names of shown frames containing the word, to hook into the game's own UI
   local _, _, word = string.find(msg, "^find%s+(%S+)")
   if word then
