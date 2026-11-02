@@ -1,5 +1,5 @@
 -- Combat Text: your damage as a short list in one place on screen, newest on top, older lines
--- pushed down. The list never grows past its line count, so a fight with fifty enemies can't
+-- pushed down. A second list (on the left by default, no icons) shows the damage you take. The list never grows past its line count, so a fight with fifty enemies can't
 -- run it down the screen: hits from the same spell close together merge into one line
 -- ("Blizzard 12.3k x14"), and the oldest line drops off when the list is full.
 -- The numbers come from the combat log messages (CHAT_MSG_*), read with the game's own message
@@ -7,7 +7,7 @@
 -- Spell icons come from the spellbook and, when installed, the icon lists that
 -- SurvivorsDragonUi and AZSSpellMeter ship.
 
-local MAX_LINES = 15
+local MAX_LINES = 20
 local HOLD, FADE = 2.2, 0.6      -- seconds a line stays solid, then fades out
 local MERGE = 0.6                -- hits from one spell this close together share a line
 local WIDTH = 240
@@ -21,18 +21,22 @@ local SCHOOL_ICON = {
 }
 
 local db
-local frame = CreateFrame("Frame", "SurvivorQoLCombatText", UIParent)
-frame:SetWidth(WIDTH)
-frame:SetHeight(20)
-frame:EnableMouse(false)
-frame:Hide()
--- only seen while moving frames, so the empty list has something to drag
-frame.back = frame:CreateTexture(nil, "BACKGROUND")
-frame.back:SetTexture("Interface\\Buttons\\WHITE8X8")
-frame.back:SetVertexColor(0, 0, 0, 0.35)
-frame.back:SetAllPoints(frame)
-frame.back:Hide()
-QOL.Movable(frame, "combatText", "Combat Text", { "CENTER", "CENTER", 260, 80 }, "combattext")
+
+local function ListFrame(name, key, label, default)
+  local f = CreateFrame("Frame", name, UIParent)
+  f:SetWidth(WIDTH)
+  f:SetHeight(20)
+  f:EnableMouse(false)
+  f:Hide()
+  -- only seen while moving frames, so the empty list has something to drag
+  f.back = f:CreateTexture(nil, "BACKGROUND")
+  f.back:SetTexture("Interface\\Buttons\\WHITE8X8")
+  f.back:SetVertexColor(0, 0, 0, 0.35)
+  f.back:SetAllPoints(f)
+  f.back:Hide()
+  QOL.Movable(f, key, label, default, "combattext")
+  return f
+end
 
 -- ---------------------------------------------------------------- reading the combat log
 -- A GlobalStrings format ("Your %s hits %s for %d.") turned into a Lua pattern, with the order
@@ -84,7 +88,33 @@ local RULES = {
     { "SPELLLOGOTHEROTHER", { "source", "spell", "target", "amount" } },
   },
 }
+-- damage you take: from creatures and hostile players (same wording for both)
+local TAKEN_HITS = {
+  { "COMBATHITCRITSCHOOLOTHERSELF", { "source", "amount", "school" }, true },
+  { "COMBATHITSCHOOLOTHERSELF", { "source", "amount", "school" } },
+  { "COMBATHITCRITOTHERSELF", { "source", "amount" }, true },
+  { "COMBATHITOTHERSELF", { "source", "amount" } },
+}
+local TAKEN_SPELLS = {
+  { "SPELLLOGCRITSCHOOLOTHERSELF", { "source", "spell", "amount", "school" }, true },
+  { "SPELLLOGSCHOOLOTHERSELF", { "source", "spell", "amount", "school" } },
+  { "SPELLLOGCRITOTHERSELF", { "source", "spell", "amount" }, true },
+  { "SPELLLOGOTHERSELF", { "source", "spell", "amount" } },
+}
+RULES.CHAT_MSG_COMBAT_CREATURE_VS_SELF_HITS = TAKEN_HITS
+RULES.CHAT_MSG_COMBAT_HOSTILEPLAYER_HITS = TAKEN_HITS
+RULES.CHAT_MSG_SPELL_CREATURE_VS_SELF_DAMAGE = TAKEN_SPELLS
+RULES.CHAT_MSG_SPELL_HOSTILEPLAYER_DAMAGE = TAKEN_SPELLS
+RULES.CHAT_MSG_SPELL_PERIODIC_SELF_DAMAGE = {
+  { "PERIODICAURADAMAGEOTHERSELF", { "amount", "school", "source", "spell" } },
+  { "PERIODICAURADAMAGESELFSELF", { "amount", "school", "spell" } },
+}
 local PET_EVENT = { CHAT_MSG_COMBAT_PET_HITS = true, CHAT_MSG_SPELL_PET_DAMAGE = true }
+local TAKEN_EVENT = {
+  CHAT_MSG_COMBAT_CREATURE_VS_SELF_HITS = true, CHAT_MSG_COMBAT_HOSTILEPLAYER_HITS = true,
+  CHAT_MSG_SPELL_CREATURE_VS_SELF_DAMAGE = true, CHAT_MSG_SPELL_HOSTILEPLAYER_DAMAGE = true,
+  CHAT_MSG_SPELL_PERIODIC_SELF_DAMAGE = true,
+}
 
 -- patterns are built on first use: GlobalStrings are loaded by then
 local compiled = {}
@@ -155,22 +185,7 @@ local function IconFor(hit)
   return tex or SCHOOL_ICON[hit.school or "Physical"] or SCHOOL_ICON.Physical
 end
 
--- ---------------------------------------------------------------- the list
-local lines = {}      -- shown lines, newest first: { key, amount, count, crit, pet, icon, at }
-local rows = {}       -- MAX_LINES row frames, reused
-
-local function Row(i)
-  if rows[i] then return rows[i] end
-  local r = CreateFrame("Frame", nil, frame)
-  r:EnableMouse(false)
-  r.icon = r:CreateTexture(nil, "ARTWORK")
-  r.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
-  r.text = r:CreateFontString(nil, "OVERLAY")
-  r.text:SetJustifyH("LEFT")
-  rows[i] = r
-  return r
-end
-
+-- ---------------------------------------------------------------- the lists
 local function Short(n)
   if n >= 1000000 then return string.format("%.1fM", n / 1000000) end
   if n >= 10000 then return string.format("%.1fk", n / 1000) end
@@ -179,88 +194,134 @@ end
 
 local function LineHeight() return math.floor(db.textSize * 1.35 + 0.5) end
 
-local function Layout()
-  local h = LineHeight()
-  frame:SetHeight(h * db.lines)
-  local shown = math.min(table.getn(lines), db.lines)
-  for i = 1, MAX_LINES do
-    local r = Row(i)
-    local l = i <= shown and lines[i]
-    if l then
-      local size = l.crit and math.floor(db.textSize * 1.25 + 0.5) or db.textSize
-      r:ClearAllPoints()
-      r:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, -(i - 1) * h)
-      r:SetWidth(WIDTH)
-      r:SetHeight(h)
-      local x = 0
-      if db.icons then
-        r.icon:SetTexture(l.icon)
-        r.icon:SetWidth(h - 2)
-        r.icon:SetHeight(h - 2)
-        r.icon:ClearAllPoints()
-        r.icon:SetPoint("LEFT", r, "LEFT", 0, 0)
-        r.icon:Show()
-        x = h + 3
+-- one list on screen. taken: the damage-you-take list (no icons, red numbers)
+local function NewList(frame, taken)
+  local L = { frame = frame }
+  local lines = {}      -- shown lines, newest first: { key, amount, count, crit, pet, icon, at }
+  local rows = {}       -- MAX_LINES row frames, reused
+
+  local function Row(i)
+    if rows[i] then return rows[i] end
+    local r = CreateFrame("Frame", nil, frame)
+    r:EnableMouse(false)
+    r.icon = r:CreateTexture(nil, "ARTWORK")
+    r.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+    r.text = r:CreateFontString(nil, "OVERLAY")
+    r.text:SetJustifyH("LEFT")
+    rows[i] = r
+    return r
+  end
+
+  function L.Layout()
+    local h = LineHeight()
+    frame:SetHeight(h * db.lines)
+    local shown = math.min(table.getn(lines), db.lines)
+    for i = 1, MAX_LINES do
+      local r = Row(i)
+      local l = i <= shown and lines[i]
+      if l then
+        local size = l.crit and math.floor(db.textSize * 1.25 + 0.5) or db.textSize
+        r:ClearAllPoints()
+        r:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, -(i - 1) * h)
+        r:SetWidth(WIDTH)
+        r:SetHeight(h)
+        local x = 0
+        if db.icons and not taken then
+          r.icon:SetTexture(l.icon)
+          -- the icon grows with its line's text, so crit icons are bigger too
+          local s = math.floor(size * 1.35 + 0.5) - 2
+          r.icon:SetWidth(s)
+          r.icon:SetHeight(s)
+          r.icon:ClearAllPoints()
+          r.icon:SetPoint("LEFT", r, "LEFT", 0, 0)
+          r.icon:Show()
+          x = s + 3
+        else
+          r.icon:Hide()
+        end
+        r.text:SetFont(FONT, size, "OUTLINE")
+        r.text:ClearAllPoints()
+        r.text:SetPoint("LEFT", r, "LEFT", x, 0)
+        local text = Short(l.amount)
+        if l.count > 1 then text = text .. " |cffaaaaaax" .. l.count .. "|r" end
+        r.text:SetText(text)
+        if taken then
+          if l.crit then r.text:SetTextColor(1, 0.25, 0.2) else r.text:SetTextColor(1, 0.5, 0.45) end
+        elseif l.crit then r.text:SetTextColor(1, 0.82, 0)
+        elseif l.pet then r.text:SetTextColor(0.75, 0.85, 1)
+        else r.text:SetTextColor(1, 1, 1) end
+        r:SetAlpha(1)
+        r:Show()
       else
-        r.icon:Hide()
+        r:Hide()
       end
-      r.text:SetFont(FONT, size, "OUTLINE")
-      r.text:ClearAllPoints()
-      r.text:SetPoint("LEFT", r, "LEFT", x, 0)
-      local text = Short(l.amount)
-      if l.count > 1 then text = text .. " |cffaaaaaax" .. l.count .. "|r" end
-      r.text:SetText(text)
-      if l.crit then r.text:SetTextColor(1, 0.82, 0)
-      elseif l.pet then r.text:SetTextColor(0.75, 0.85, 1)
-      else r.text:SetTextColor(1, 1, 1) end
-      r:SetAlpha(1)
-      r:Show()
-    else
-      r:Hide()
     end
   end
-end
 
-local function Add(hit, pet)
-  local key = (pet and "pet:" or "") .. (hit.spell or "melee")
-  local now = GetTime()
-  if db.merge then
-    for i = 1, table.getn(lines) do
-      local l = lines[i]
-      if l.key == key and now - l.at <= MERGE then
-        l.amount, l.count, l.at = l.amount + hit.amount, l.count + 1, now
-        l.crit = l.crit or hit.crit
-        -- the line just hit moves back to the top
+  function L.Add(hit, pet)
+    local key = (pet and "pet:" or "") .. (hit.source or "") .. ":" .. (hit.spell or "melee")
+    local now = GetTime()
+    if db.merge then
+      for i = 1, table.getn(lines) do
+        local l = lines[i]
+        if l.key == key and now - l.at <= MERGE then
+          l.amount, l.count, l.at = l.amount + hit.amount, l.count + 1, now
+          l.crit = l.crit or hit.crit
+          -- the line just hit moves back to the top
+          table.remove(lines, i)
+          table.insert(lines, 1, l)
+          L.Layout()
+          return
+        end
+      end
+    end
+    table.insert(lines, 1, { key = key, amount = hit.amount, count = 1, crit = hit.crit, pet = pet,
+      icon = not taken and IconFor(hit) or nil, at = now })
+    while table.getn(lines) > db.lines do table.remove(lines) end
+    L.Layout()
+  end
+
+  -- fading: each line goes solid for HOLD seconds after its last hit, then fades and drops off
+  function L.Tick()
+    if QOL.moving then
+      frame.back:Show()
+      return
+    end
+    frame.back:Hide()
+    if taken and not db.taken then
+      if frame:IsShown() then frame:Hide() end
+      return
+    end
+    if not frame:IsShown() then frame:Show() end
+    local now, changed = GetTime(), false
+    for i = table.getn(lines), 1, -1 do
+      local age = now - lines[i].at
+      if age > HOLD + FADE then
         table.remove(lines, i)
-        table.insert(lines, 1, l)
-        Layout()
-        return
+        changed = true
+      elseif rows[i] then
+        rows[i]:SetAlpha(age > HOLD and 1 - (age - HOLD) / FADE or 1)
       end
     end
+    if changed then L.Layout() end
   end
-  table.insert(lines, 1, { key = key, amount = hit.amount, count = 1, crit = hit.crit, pet = pet, icon = IconFor(hit), at = now })
-  while table.getn(lines) > db.lines do table.remove(lines) end
-  Layout()
+
+  function L.Clear()
+    for i = table.getn(lines), 1, -1 do table.remove(lines, i) end
+  end
+
+  return L
 end
 
--- fading: each line goes solid for HOLD seconds after its last hit, then fades and drops off
+local dealt = NewList(ListFrame("SurvivorQoLCombatText", "combatText", "Combat Text",
+  { "CENTER", "CENTER", 260, 80 }), false)
+local takenList = NewList(ListFrame("SurvivorQoLDamageTaken", "damageTaken", "Damage Taken",
+  { "CENTER", "CENTER", -260 - WIDTH, 80 }), true)
+local LISTS = { dealt, takenList }
+
 local function Tick()
-  if QOL.moving then
-    frame.back:Show()
-    return
-  end
-  frame.back:Hide()
-  local now, changed = GetTime(), false
-  for i = table.getn(lines), 1, -1 do
-    local age = now - lines[i].at
-    if age > HOLD + FADE then
-      table.remove(lines, i)
-      changed = true
-    elseif rows[i] then
-      rows[i]:SetAlpha(age > HOLD and 1 - (age - HOLD) / FADE or 1)
-    end
-  end
-  if changed then Layout() end
+  dealt.Tick()
+  takenList.Tick()
 end
 
 local ev = CreateFrame("Frame")
@@ -271,7 +332,12 @@ ev:SetScript("OnEvent", function()
     return
   end
   local hit = Parse(event, arg1 or "")
-  if hit then Add(hit, PET_EVENT[event]) end
+  if not hit then return end
+  if TAKEN_EVENT[event] then
+    if db.taken then takenList.Add(hit) end
+  else
+    dealt.Add(hit, PET_EVENT[event])
+  end
 end)
 
 -- /qol and move mode: a few sample lines so the size and spot can be judged
@@ -279,7 +345,11 @@ function QOL.CombatTextSample()
   if not db then return end
   local samples = { { "Frostbolt", 1840, true }, { "Blizzard", 12330 }, { nil, 412 } }
   for _, s in ipairs(samples) do
-    Add({ spell = s[1], amount = s[2], crit = s[3], school = "Frost" })
+    dealt.Add({ spell = s[1], amount = s[2], crit = s[3], school = "Frost" })
+  end
+  if db.taken then
+    takenList.Add({ source = "Gnoll Brute", amount = 86 })
+    takenList.Add({ source = "Kobold Geomancer", spell = "Fireball", amount = 214, crit = true })
   end
 end
 
@@ -287,33 +357,49 @@ QOL.Register({
   key = "combattext",
   label = "Combat Text",
   glyph = "g_alert",
-  desc = "Your damage as a short list in one spot, newest on top. Hits from one spell merge into one line, so it never runs down the screen.",
+  desc = "Your damage as a short list in one spot, newest on top, and the damage you take in a second list on the left. Hits from one spell merge into one line, so it never runs down the screen.",
   default = false,
-  defaults = { icons = true, merge = true, lines = 8, textSize = 14 },
+  defaults = { icons = true, merge = true, lines = 10, textSize = 16, taken = true },
   Enable = function(mdb)
     db = mdb
     for e in pairs(RULES) do ev:RegisterEvent(e) end
     ev:RegisterEvent("SPELLS_CHANGED")
-    frame:Show()
-    frame:SetScript("OnUpdate", Tick)
-    Layout()
+    -- 0.4.0 defaults were 8 lines at size 14; 0.4.1 shows 10 bigger lines. Move old defaults once
+    -- (11 was a short-lived test default).
+    if not db.v041b then
+      if db.lines == 8 then db.lines = 10 end
+      if db.textSize == 14 or db.textSize == 11 then db.textSize = 16 end
+      db.v041, db.v041b = nil, true
+    end
+    dealt.frame:Show()
+    if db.taken then takenList.frame:Show() end
+    dealt.frame:SetScript("OnUpdate", Tick)
+    dealt.Layout()
+    takenList.Layout()
   end,
   Disable = function()
     ev:UnregisterAllEvents()
-    frame:SetScript("OnUpdate", nil)
-    for i = table.getn(lines), 1, -1 do table.remove(lines, i) end
-    frame:Hide()
+    dealt.frame:SetScript("OnUpdate", nil)
+    for _, L in ipairs(LISTS) do
+      L.Clear()
+      L.frame:Hide()
+    end
   end,
-  Apply = function() Layout() end,
+  Apply = function()
+    if not db.taken then takenList.Clear() end
+    dealt.Layout()
+    takenList.Layout()
+  end,
   Page = function(P)
     local G = P:Group("Look")
-    G:Checks({ { "Show spell icons", "icons" }, { "Merge hits from the same spell", "merge" } })
+    G:Checks({ { "Show spell icons", "icons" }, { "Merge hits from the same spell", "merge" },
+      { "Show damage you take (second list)", "taken" } })
     G:Sliders({
       { "lines", function(v) return "Most lines: " .. v end, 3, MAX_LINES, 1, "3", tostring(MAX_LINES) },
-      { "textSize", function(v) return "Text size: " .. v end, 10, 24, 1, "Small", "Large" },
+      { "textSize", function(v) return "Text size: " .. v end, 8, 24, 1, "Small", "Large" },
     })
     G:Buttons({ { "Show a sample", function() QOL.CombatTextSample() end } })
-    G:Note("Use Move frames at the top of this window to place it. Crits are gold, your pet's hits are blue.")
+    G:Note("Use Move frames at the top of this window to place the lists. Crits are gold, your pet's hits are blue, damage you take is red.")
     G:Done()
   end,
 })
